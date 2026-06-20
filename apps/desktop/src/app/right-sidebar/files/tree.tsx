@@ -56,6 +56,7 @@ export function ProjectTree({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const treeRef = useRef<TreeApi<TreeNode> | null>(null)
   const [size, setSize] = useState({ height: 0, width: 0 })
+  const [menuTarget, setMenuTarget] = useState<{ isFolder: boolean; isRoot: boolean; path: string } | null>(null)
 
   const syncTreeSize = useCallback(() => {
     const el = containerRef.current
@@ -123,42 +124,73 @@ export function ProjectTree({
   )
 
   return (
-    <div className="min-h-0 flex-1 overflow-hidden" ref={containerRef}>
-      {size.height > 0 && size.width > 0 ? (
-        <Tree<TreeNode>
-          childrenAccessor={node => (node?.isDirectory ? (node.children ?? []) : null)}
-          data={data}
-          disableDrag
-          disableDrop
-          disableEdit
-          dndManager={getFileTreeDndManager()}
-          height={size.height}
-          indent={INDENT}
-          initialOpenState={openState}
-          key={`${cwd}:${collapseNonce}:${revealNonce}`}
-          onActivate={handleActivate}
-          onToggle={handleToggle}
-          openByDefault={false}
-          padding={0}
-          ref={treeRef}
-          renderRow={ProjectRowWrapper}
-          rowHeight={ROW_HEIGHT}
-          width={size.width}
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div
+          className="min-h-0 flex-1 overflow-hidden"
+          // A single tree-level context menu. We read which row was
+          // right-clicked from its data-node-path attribute instead of wrapping
+          // every virtualized row in its own Radix menu (that per-row setup made
+          // resizing the panel lag). Right-clicking empty space targets the root.
+          onContextMenu={event => {
+            const el = (event.target as HTMLElement).closest('[data-node-path]')
+
+            if (el) {
+              setMenuTarget({
+                isFolder: el.getAttribute('data-node-folder') === '1',
+                isRoot: false,
+                path: el.getAttribute('data-node-path') ?? ''
+              })
+            } else {
+              setMenuTarget({ isFolder: true, isRoot: true, path: cwd })
+            }
+          }}
+          ref={containerRef}
         >
-          {props => (
-            <ProjectTreeRow
-              {...props}
-              cwd={cwd}
-              onAttachFile={onActivateFile}
-              onAttachFolder={onActivateFolder}
-              onPreviewFile={onPreviewFile}
-            />
+          {size.height > 0 && size.width > 0 ? (
+            <Tree<TreeNode>
+              childrenAccessor={node => (node?.isDirectory ? (node.children ?? []) : null)}
+              data={data}
+              disableDrag
+              disableDrop
+              disableEdit
+              dndManager={getFileTreeDndManager()}
+              height={size.height}
+              indent={INDENT}
+              initialOpenState={openState}
+              key={`${cwd}:${collapseNonce}:${revealNonce}`}
+              onActivate={handleActivate}
+              onToggle={handleToggle}
+              openByDefault={false}
+              padding={0}
+              ref={treeRef}
+              renderRow={ProjectRowWrapper}
+              rowHeight={ROW_HEIGHT}
+              width={size.width}
+            >
+              {props => (
+                <ProjectTreeRow
+                  {...props}
+                  onAttachFile={onActivateFile}
+                  onAttachFolder={onActivateFolder}
+                  onPreviewFile={onPreviewFile}
+                />
+              )}
+            </Tree>
+          ) : (
+            <TreeSizingState />
           )}
-        </Tree>
-      ) : (
-        <TreeSizingState />
+        </div>
+      </ContextMenuTrigger>
+      {menuTarget && (
+        <ProjectTreeRowMenu
+          cwd={cwd}
+          isFolder={menuTarget.isFolder}
+          isRoot={menuTarget.isRoot}
+          path={menuTarget.path}
+        />
       )}
-    </div>
+    </ContextMenu>
   )
 }
 
@@ -184,7 +216,6 @@ function ProjectRowWrapper({ attrs, children, innerRef }: RowRendererProps<TreeN
 }
 
 function ProjectTreeRow({
-  cwd,
   dragHandle,
   node,
   onAttachFile,
@@ -192,7 +223,6 @@ function ProjectTreeRow({
   onPreviewFile,
   style
 }: NodeRendererProps<TreeNode> & {
-  cwd: string
   onAttachFile: (path: string) => void
   onAttachFolder: (path: string) => void
   onPreviewFile?: (path: string) => void
@@ -205,7 +235,7 @@ function ProjectTreeRow({
   const isPlaceholder = Boolean(node.data.placeholder)
   const isErrorPlaceholder = node.data.placeholder === 'error'
 
-  const row = (
+  return (
     <div
       aria-expanded={isFolder ? node.isOpen : undefined}
       aria-selected={node.isSelected}
@@ -214,6 +244,11 @@ function ProjectTreeRow({
         node.isSelected && 'bg-(--ui-row-active-background) text-foreground',
         isPlaceholder && 'pointer-events-none italic text-muted-foreground/70'
       )}
+      // The tree-level context menu reads these to know which entry was
+      // right-clicked. Placeholder (loading/error) rows carry none, so a
+      // right-click on them falls through to the root target.
+      data-node-folder={!isPlaceholder && isFolder ? '1' : undefined}
+      data-node-path={isPlaceholder ? undefined : node.data.id}
       draggable={!isPlaceholder}
       onClick={event => {
         event.stopPropagation()
@@ -279,27 +314,16 @@ function ProjectTreeRow({
       <span className="min-w-0 flex-1 truncate">{node.data.name}</span>
     </div>
   )
-
-  // Synthetic loading/error rows aren't real entries — no actions to offer.
-  if (isPlaceholder) {
-    return row
-  }
-
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
-      <ProjectTreeRowMenu cwd={cwd} isFolder={isFolder} path={node.data.id} />
-    </ContextMenu>
-  )
 }
 
 interface ProjectTreeRowMenuProps {
   cwd: string
   isFolder: boolean
+  isRoot: boolean
   path: string
 }
 
-function ProjectTreeRowMenu({ cwd, isFolder, path }: ProjectTreeRowMenuProps) {
+function ProjectTreeRowMenu({ cwd, isFolder, isRoot, path }: ProjectTreeRowMenuProps) {
   const { t } = useI18n()
   const r = t.rightSidebar
   const relPath = relativePathFromCwd(cwd, path)
@@ -317,15 +341,21 @@ function ProjectTreeRowMenu({ cwd, isFolder, path }: ProjectTreeRowMenuProps) {
         <Codicon name="new-folder" size="0.875rem" />
         {r.newFolder ?? 'New folder'}
       </ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem onSelect={() => openRenamePrompt(path, isFolder)}>
-        <Codicon name="edit" size="0.875rem" />
-        {r.renameAction ?? 'Rename'}
-      </ContextMenuItem>
-      <ContextMenuItem onSelect={() => openDeletePrompt(path, isFolder)} variant="destructive">
-        <Codicon name="trash" size="0.875rem" />
-        {r.deleteAction ?? 'Delete'}
-      </ContextMenuItem>
+      {/* The workspace root isn't a tree entry — only offer create/copy/reveal,
+          not rename/delete of the folder you're browsing. */}
+      {!isRoot && (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={() => openRenamePrompt(path, isFolder)}>
+            <Codicon name="edit" size="0.875rem" />
+            {r.renameAction ?? 'Rename'}
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => openDeletePrompt(path, isFolder)} variant="destructive">
+            <Codicon name="trash" size="0.875rem" />
+            {r.deleteAction ?? 'Delete'}
+          </ContextMenuItem>
+        </>
+      )}
       <ContextMenuSeparator />
       <CopyButton appearance="context-menu-item" label={r.copyPath ?? 'Copy path'} text={path} />
       {relPath && (
