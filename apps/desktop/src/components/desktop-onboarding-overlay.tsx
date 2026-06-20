@@ -436,6 +436,17 @@ export function Picker({ ctx }: { ctx: OnboardingContext }) {
   const hasOauth = ordered.length > 0
   const apiKeyOptions = useApiKeyCatalog()
 
+  // Still loading the OAuth provider list: show the spinner rather than
+  // briefly flashing the API-key form. Without this guard the form (which
+  // carries the "Local / custom endpoint" option) renders first because
+  // `hasOauth` is false while `providers === null`, then swaps to the OAuth
+  // picker once the list resolves — yanking the custom-endpoint option out
+  // from under the user. localEndpoint / explicit apikey mode still force the
+  // form immediately since they don't depend on the OAuth list.
+  if (providers === null && !localEndpoint && mode !== 'apikey') {
+    return <Status>{t.onboarding.lookingUpProviders}</Status>
+  }
+
   // localEndpoint forces the key form regardless of `mode` (which a manual
   // provider refresh may flip back to 'oauth'); it preselects the local option
   // and hides the "back to sign in" link since the user came specifically to
@@ -457,10 +468,6 @@ export function Picker({ ctx }: { ctx: OnboardingContext }) {
         )}
       </div>
     )
-  }
-
-  if (providers === null) {
-    return <Status>{t.onboarding.lookingUpProviders}</Status>
   }
 
   const select = (p: OAuthProvider) => void startProviderOAuth(p, ctx)

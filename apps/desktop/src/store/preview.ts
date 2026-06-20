@@ -68,6 +68,53 @@ export const $previewServerRestart = atom<PreviewServerRestart | null>(null)
 export const $previewServerRestartStatus = computed($previewServerRestart, restart => restart?.status ?? 'idle')
 export const $sessionPreviewRegistry = atom<SessionPreviewRegistry>(loadSessionPreviewRegistry())
 
+// Resolved file paths with unsaved edits in the inline editor. The preview tab
+// bar reads this to show a JetBrains-style "unsaved" dot on the matching tab.
+export const $dirtyPreviewFiles = atom<ReadonlySet<string>>(new Set())
+
+export function setPreviewFileDirty(path: string, dirty: boolean) {
+  const current = $dirtyPreviewFiles.get()
+
+  if (dirty === current.has(path)) {
+    return
+  }
+
+  const next = new Set(current)
+
+  if (dirty) {
+    next.add(path)
+  } else {
+    next.delete(path)
+  }
+
+  $dirtyPreviewFiles.set(next)
+}
+
+// Paths the inline editor wrote itself, with the timestamp of the write. The
+// file-change watcher consults this to ignore reload events caused by our own
+// saves (which would otherwise reseed the editor and reset the cursor).
+const selfSavedAt = new Map<string, number>()
+const SELF_SAVE_WINDOW_MS = 1500
+
+export function markPreviewFileSelfSaved(path: string) {
+  selfSavedAt.set(path, Date.now())
+}
+
+// True when `path` was saved by the editor within the recent window. Clears the
+// entry so a genuine later external change still triggers a reload.
+export function consumePreviewSelfSave(path: string): boolean {
+  const at = selfSavedAt.get(path)
+
+  if (at === undefined) {
+    return false
+  }
+
+  const recent = Date.now() - at < SELF_SAVE_WINDOW_MS
+  selfSavedAt.delete(path)
+
+  return recent
+}
+
 $sessionPreviewRegistry.subscribe(persistSessionPreviewRegistry)
 
 function isSamePreviewTarget(a: PreviewTarget | null, b: PreviewTarget | null): boolean {

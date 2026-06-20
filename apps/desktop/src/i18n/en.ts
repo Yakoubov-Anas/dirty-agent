@@ -1664,6 +1664,13 @@ export const en: Translations = {
     truncated: 'Showing first 512 KB.',
     noInlineTitle: 'No inline preview',
     noInlineBody: mimeType => `${mimeType || 'This file type'} can still be attached as context.`,
+    edit: 'Edit',
+    save: 'Save',
+    cancel: 'Cancel',
+    saving: 'Saving…',
+    saved: 'Saved',
+    saveFailed: message => `Save failed: ${message}`,
+    modifiedBadge: 'Modified',
     console: {
       deselect: 'Deselect entry',
       select: 'Select entry',

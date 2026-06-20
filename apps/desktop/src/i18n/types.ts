@@ -1306,6 +1306,15 @@ export interface Translations {
     truncated: string
     noInlineTitle: string
     noInlineBody: (mimeType: string) => string
+    // Editable file preview. Optional so non-default locales stay valid and
+    // fall back to English at runtime (see i18n/runtime resolvePath fallback).
+    edit?: string
+    save?: string
+    cancel?: string
+    saving?: string
+    saved?: string
+    saveFailed?: (message: string) => string
+    modifiedBadge?: string
     console: {
       deselect: string
       select: string

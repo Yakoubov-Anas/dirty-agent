@@ -1690,6 +1690,69 @@ async def fs_read_text(path: str):
     }
 
 
+# Sensitive filenames that must never be written through the editor endpoint.
+# Mirrors the desktop's hardening.cjs sensitiveFileBlockReason intent (secrets,
+# credentials, private keys) so the remote backend has the same guard.
+_FS_WRITE_BLOCKED_NAMES = {
+    ".env",
+    ".netrc",
+    "credentials.json",
+    "auth.json",
+    ".credentials.json",
+    "id_rsa",
+    "id_ed25519",
+    "id_ecdsa",
+}
+_FS_WRITE_BLOCKED_SUFFIXES = {".pem", ".key", ".pfx", ".p12"}
+_FS_TEXT_WRITE_MAX_BYTES = 16 * 1024 * 1024
+
+
+def _fs_write_block_reason(target: Path) -> str | None:
+    name = target.name.lower()
+    if name in _FS_WRITE_BLOCKED_NAMES or name.startswith(".env."):
+        return f"'{target.name}' holds secrets"
+    if target.suffix.lower() in _FS_WRITE_BLOCKED_SUFFIXES:
+        return f"'{target.name}' is a key/credential file"
+    return None
+
+
+class FsWriteText(BaseModel):
+    path: str
+    content: str
+
+
+@app.post("/api/fs/write-text")
+async def fs_write_text(payload: FsWriteText):
+    target = _fs_path(payload.path)
+
+    reason = _fs_write_block_reason(target)
+    if reason is not None:
+        raise HTTPException(status_code=403, detail=f"Save blocked for sensitive file: {reason}")
+
+    text = payload.content if isinstance(payload.content, str) else str(payload.content or "")
+    encoded = text.encode("utf-8")
+    if len(encoded) > _FS_TEXT_WRITE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Content too large")
+
+    if target.exists() and target.is_dir():
+        raise HTTPException(status_code=400, detail="Path points to a directory")
+
+    tmp = target.with_name(target.name + ".tmp")
+    try:
+        tmp.write_bytes(encoded)
+        os.replace(tmp, target)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="File is not writable")
+    except OSError as exc:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise HTTPException(status_code=400, detail=str(exc) or "File write failed")
+
+    return {"byteSize": len(encoded), "path": str(target)}
+
+
 @app.get("/api/fs/read-data-url")
 async def fs_read_data_url(path: str):
     target, st = _fs_regular_file(_fs_path(path))

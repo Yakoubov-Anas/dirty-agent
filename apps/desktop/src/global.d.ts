@@ -46,6 +46,7 @@ declare global {
       requestMicrophoneAccess: () => Promise<boolean>
       readFileDataUrl: (filePath: string) => Promise<string>
       readFileText: (filePath: string) => Promise<HermesReadFileTextResult>
+      writeFileText: (filePath: string, content: string) => Promise<HermesWriteFileTextResult>
       selectPaths: (options?: HermesSelectPathsOptions) => Promise<string[]>
       writeClipboard: (text: string) => Promise<boolean>
       saveImageFromUrl: (url: string) => Promise<boolean>
@@ -445,6 +446,11 @@ export interface HermesReadFileTextResult {
   path: string
   text: string
   truncated?: boolean
+}
+
+export interface HermesWriteFileTextResult {
+  byteSize: number
+  path: string
 }
 
 export interface HermesPreviewWatch {

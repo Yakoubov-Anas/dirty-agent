@@ -3,7 +3,8 @@ import type {
   HermesReadDirResult,
   HermesReadFileTextResult,
   HermesSelectPathsOptions,
-  HermesWorktreeInfo
+  HermesWorktreeInfo,
+  HermesWriteFileTextResult
 } from '@/global'
 import { $connection } from '@/store/session'
 
@@ -21,6 +22,7 @@ function connectionCacheKey(connection: HermesConnection | null) {
   if (!connection) {
     return 'local:'
   }
+
   return `${connection.mode || 'local'}:${connection.profile || ''}:${connection.baseUrl || ''}`
 }
 
@@ -38,45 +40,69 @@ function fsPath(endpoint: string, filePath: string) {
 
 function bridge() {
   const desktop = window.hermesDesktop
+
   if (!desktop) {
     throw new Error('Hermes Desktop bridge is unavailable')
   }
+
   return desktop
 }
 
 export async function readDesktopDir(path: string): Promise<HermesReadDirResult> {
   const desktop = bridge()
+
   if (!isDesktopFsRemoteMode()) {
     return desktop.readDir(path)
   }
+
   return desktop.api<HermesReadDirResult>({ path: fsPath('list', path) })
 }
 
 export async function readDesktopFileText(path: string): Promise<HermesReadFileTextResult> {
   const desktop = bridge()
+
   if (!isDesktopFsRemoteMode()) {
     return desktop.readFileText(path)
   }
+
   return desktop.api<HermesReadFileTextResult>({ path: fsPath('read-text', path) })
+}
+
+export async function writeDesktopFileText(path: string, content: string): Promise<HermesWriteFileTextResult> {
+  const desktop = bridge()
+
+  if (!isDesktopFsRemoteMode()) {
+    return desktop.writeFileText(path, content)
+  }
+
+  return desktop.api<HermesWriteFileTextResult>({
+    path: '/api/fs/write-text',
+    method: 'POST',
+    body: { path, content }
+  })
 }
 
 export async function readDesktopFileDataUrl(path: string): Promise<string> {
   const desktop = bridge()
+
   if (!isDesktopFsRemoteMode()) {
     return desktop.readFileDataUrl(path)
   }
 
   const result = await desktop.api<string | { dataUrl?: string }>({ path: fsPath('read-data-url', path) })
+
   return typeof result === 'string' ? result : result.dataUrl || ''
 }
 
 export async function desktopGitRoot(path: string): Promise<string | null> {
   const desktop = bridge()
+
   if (!isDesktopFsRemoteMode()) {
     return desktop.gitRoot ? desktop.gitRoot(path) : null
   }
 
   const result = await desktop.api<{ root: string | null }>({ path: fsPath('git-root', path) })
+
   return result.root
 }
 
@@ -103,11 +129,14 @@ export async function desktopDefaultCwd(): Promise<{ branch: string; cwd: string
 
 export async function selectDesktopPaths(options?: HermesSelectPathsOptions): Promise<string[]> {
   const desktop = bridge()
+
   if (!isDesktopFsRemoteMode()) {
     return desktop.selectPaths(options)
   }
+
   if (!options?.directories || options.multiple !== false) {
     return []
   }
+
   return remotePicker ? remotePicker.selectPaths(options) : []
 }

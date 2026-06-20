@@ -99,4 +99,23 @@ describe('onboarding Picker', () => {
 
     expect(screen.queryByRole('button', { name: "I'll choose a provider later" })).toBeNull()
   })
+
+  it('shows the loading spinner (not the API-key form) while OAuth providers load', () => {
+    // Regression: with providers === null the picker used to fall through to
+    // the API-key form (hasOauth false), then swap to the OAuth picker once the
+    // list resolved — flashing the "Local / custom endpoint" option away. While
+    // loading we must show the spinner so the form doesn't appear prematurely.
+    $desktopOnboarding.set({ ...$desktopOnboarding.get(), configured: false, providers: null, mode: 'oauth' })
+    render(<Picker ctx={ctx} />)
+
+    expect(screen.getByText('Looking up providers...')).toBeTruthy()
+    expect(screen.queryByText('Local / custom endpoint')).toBeNull()
+  })
+
+  it('still shows the API-key form immediately in localEndpoint mode while loading', () => {
+    $desktopOnboarding.set({ ...$desktopOnboarding.get(), configured: false, providers: null, localEndpoint: true })
+    render(<Picker ctx={ctx} />)
+
+    expect(screen.queryByText('Looking up providers...')).toBeNull()
+  })
 })

@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react'
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 
 import type { SetTitlebarToolGroup } from '@/app/shell/titlebar-controls'
 import { Codicon } from '@/components/ui/codicon'
@@ -13,6 +13,7 @@ import {
   selectRightRailTab
 } from '@/store/layout'
 import {
+  $dirtyPreviewFiles,
   $filePreviewTabs,
   $previewReloadRequest,
   $previewTarget,
@@ -21,6 +22,7 @@ import {
   type PreviewTarget
 } from '@/store/preview'
 
+import { filePathForTarget } from './preview-file'
 import { PreviewPane } from './preview-pane'
 
 export const PREVIEW_RAIL_MIN_WIDTH = '18rem'
@@ -58,6 +60,39 @@ export function ChatPreviewRail({ onRestartServer, setTitlebarToolGroup }: ChatP
   const activeTabId = useStore($rightRailActiveTabId)
   const filePreviewTabs = useStore($filePreviewTabs)
   const previewTarget = useStore($previewTarget)
+  const dirtyFiles = useStore($dirtyPreviewFiles)
+  const wheelCleanupRef = useRef<(() => void) | null>(null)
+
+  // Vertical mouse-wheel scrolls the tab strip horizontally (the scrollbar is
+  // hidden). A callback ref — not a plain ref + mount effect — because the
+  // strip is conditionally rendered (the component returns null with no tabs),
+  // so a `[]`-dep effect would capture a null ref and never re-attach once tabs
+  // appear. Only intercept when there's overflow and the gesture is mostly
+  // vertical, so trackpad horizontal swipes still scroll natively.
+  const tabStripRef = useCallback((el: HTMLDivElement | null) => {
+    wheelCleanupRef.current?.()
+    wheelCleanupRef.current = null
+
+    if (!el) {
+      return
+    }
+
+    const onWheel = (event: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth || event.deltaY === 0) {
+        return
+      }
+
+      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
+        return
+      }
+
+      event.preventDefault()
+      el.scrollLeft += event.deltaY
+    }
+
+    el.addEventListener('wheel', onWheel, { passive: false })
+    wheelCleanupRef.current = () => el.removeEventListener('wheel', onWheel)
+  }, [])
 
   const tabs = useMemo<readonly RailTab[]>(
     () => [
@@ -86,10 +121,12 @@ export function ChatPreviewRail({ onRestartServer, setTitlebarToolGroup }: ChatP
       <div className="group/rail-tabs flex h-(--titlebar-height) shrink-0 border-b border-(--ui-stroke-tertiary) bg-(--ui-sidebar-surface-background)">
         <div
           className="flex min-w-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          ref={tabStripRef}
           role="tablist"
         >
           {tabs.map(tab => {
             const active = tab.id === activeTab.id
+            const isDirty = dirtyFiles.has(filePathForTarget(tab.target))
 
             return (
               <div
@@ -123,11 +160,20 @@ export function ChatPreviewRail({ onRestartServer, setTitlebarToolGroup }: ChatP
                 <Tip label={tab.label}>
                   <button
                     aria-selected={active}
-                    className="flex h-full min-w-0 max-w-full items-center overflow-hidden pl-3 pr-2 text-left outline-none"
+                    className="flex h-full min-w-0 max-w-full items-center gap-1.5 overflow-hidden pl-3 pr-2 text-left outline-none"
                     onClick={() => selectRightRailTab(tab.id)}
                     role="tab"
                     type="button"
                   >
+                    {/* JetBrains-style unsaved indicator: a small dot before the
+                        file name, in the tab's own text color. */}
+                    {isDirty && (
+                      <span
+                        aria-label={t.preview.modifiedBadge ?? 'Unsaved changes'}
+                        className="size-1.5 shrink-0 rounded-full bg-current"
+                        role="img"
+                      />
+                    )}
                     <span className="block min-w-0 truncate">{tab.label}</span>
                   </button>
                 </Tip>

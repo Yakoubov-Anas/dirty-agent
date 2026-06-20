@@ -78,7 +78,8 @@ const {
   encryptDesktopSecret: encryptDesktopSecretStrict,
   resolveReadableFileForIpc,
   resolveRequestedPathForIpc,
-  resolveTimeoutMs
+  resolveTimeoutMs,
+  sensitiveFileBlockReason
 } = require('./hardening.cjs')
 
 let nodePty = null
@@ -3423,20 +3424,30 @@ function buildApplicationMenu() {
   template.push({
     label: 'Edit',
     submenu: [
-      { role: 'undo' },
-      { role: 'redo' },
+      // registerAccelerator:false keeps the Cmd/Ctrl+Z|Y|A shortcut shown in
+      // the menu but stops the menu from CAPTURING the keystroke. Without this
+      // Electron fires native execCommand('undo'/'redo'/'selectAll'), which the
+      // CodeMirror editors ignore (they own their own history/selection) — so
+      // Ctrl+Z appeared dead in the file editor. Letting the key reach the web
+      // page lets CodeMirror handle it, and native inputs still handle theirs.
+      { role: 'undo', registerAccelerator: false },
+      { role: 'redo', registerAccelerator: false },
       { type: 'separator' },
       { role: 'cut' },
       { role: 'copy' },
       { role: 'paste' },
       { role: 'delete' },
-      { role: 'selectAll' }
+      { role: 'selectAll', registerAccelerator: false }
     ]
   })
   template.push({
     label: 'View',
     submenu: [
-      { role: 'reload' },
+      // registerAccelerator:false frees plain Cmd/Ctrl+R for the web page (the
+      // code editor uses it to open find-and-replace) while still showing the
+      // shortcut in the menu. Force-reload (Cmd/Ctrl+Shift+R) keeps its
+      // accelerator, so reloading the app is still a keystroke away.
+      { role: 'reload', registerAccelerator: false },
       { role: 'forceReload' },
       { role: 'toggleDevTools' },
       { type: 'separator' },
@@ -5689,6 +5700,47 @@ ipcMain.handle('hermes:readFileText', async (_event, filePath) => {
   } finally {
     await handle.close()
   }
+})
+
+// Write text back to a local file (the editable file preview). Mirrors the
+// safety posture of hermes:readFileText: resolve + reject unsafe path syntax,
+// block sensitive files (.env, credentials, keys), refuse directories, and
+// write atomically (tmp + rename) so a crash mid-write can't truncate the
+// original. Caps the payload so a runaway renderer can't write an enormous
+// blob. Remote backends use POST /api/fs/write-text instead (see desktop-fs).
+const TEXT_WRITE_MAX_BYTES = 16 * 1024 * 1024
+
+ipcMain.handle('hermes:writeFileText', async (_event, filePath, content) => {
+  const purpose = 'Text save'
+  const resolvedPath = resolveRequestedPathForIpc(filePath, { purpose })
+
+  const blockReason = sensitiveFileBlockReason(resolvedPath)
+  if (blockReason) {
+    throw new Error(`${purpose} blocked for sensitive file: ${blockReason}`)
+  }
+
+  const text = typeof content === 'string' ? content : String(content ?? '')
+  const byteSize = Buffer.byteLength(text, 'utf8')
+  if (byteSize > TEXT_WRITE_MAX_BYTES) {
+    throw new Error(`${purpose} failed: content is too large (${byteSize} bytes; limit ${TEXT_WRITE_MAX_BYTES} bytes).`)
+  }
+
+  // Refuse to clobber a directory; allow creating a new file otherwise.
+  try {
+    const stat = await fs.promises.stat(resolvedPath)
+    if (stat.isDirectory()) {
+      throw new Error(`${purpose} failed: path points to a directory.`)
+    }
+  } catch (error) {
+    const code = error && typeof error === 'object' ? error.code : ''
+    if (code !== 'ENOENT') {
+      throw error
+    }
+  }
+
+  writeFileAtomic(resolvedPath, text, 'utf8')
+
+  return { byteSize, path: resolvedPath }
 })
 
 ipcMain.handle('hermes:selectPaths', async (_event, options = {}) => {

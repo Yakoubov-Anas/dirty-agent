@@ -6,7 +6,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   ReactNode
 } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ShikiHighlighter from 'react-shiki'
 import { Streamdown } from 'streamdown'
 
@@ -15,11 +15,13 @@ import { droppedFileInlineRef } from '@/app/chat/composer/inline-refs'
 import { HERMES_PATHS_MIME } from '@/app/chat/hooks/use-composer-actions'
 import { isAddSelectionShortcut } from '@/app/right-sidebar/terminal/selection'
 import { PageLoader } from '@/components/page-loader'
+import { CodeEditor } from '@/components/ui/code-editor'
 import { translateNow, useI18n } from '@/i18n'
-import { readDesktopFileDataUrl, readDesktopFileText } from '@/lib/desktop-fs'
+import { readDesktopFileDataUrl, readDesktopFileText, writeDesktopFileText } from '@/lib/desktop-fs'
 import { cn } from '@/lib/utils'
-import type { PreviewTarget } from '@/store/preview'
+import { markPreviewFileSelfSaved, type PreviewTarget, setPreviewFileDirty } from '@/store/preview'
 import { $currentCwd } from '@/store/session'
+import { useTheme } from '@/themes'
 
 const SHIKI_THEME = { dark: 'github-dark-default', light: 'github-light-default' } as const
 const TEXT_PREVIEW_MAX_BYTES = 512 * 1024
@@ -133,7 +135,7 @@ interface LocalPreviewState {
   truncated?: boolean
 }
 
-function filePathForTarget(target: PreviewTarget) {
+export function filePathForTarget(target: PreviewTarget) {
   if (target.path) {
     return target.path
   }
@@ -299,22 +301,6 @@ function MarkdownPreview({ text }: { text: string }) {
   )
 }
 
-function PreviewToggle({ asSource, onToggle }: { asSource: boolean; onToggle: () => void }) {
-  const { t } = useI18n()
-
-  return (
-    <div className="sticky top-0 z-10 flex justify-end border-b border-border/40 bg-transparent px-3 py-1 backdrop-blur">
-      <button
-        className="text-[0.625rem] font-bold text-muted-foreground underline decoration-current/20 underline-offset-4 transition-colors hover:text-foreground"
-        onClick={onToggle}
-        type="button"
-      >
-        {asSource ? t.preview.renderedPreview : t.preview.source}
-      </button>
-    </div>
-  )
-}
-
 // Gutter and Shiki output share `font-mono text-xs leading-relaxed py-3` so
 // each line aligns vertically. The selection overlay relies on the same
 // `text-xs * leading-relaxed = 1.21875rem` line-height to position itself.
@@ -449,13 +435,153 @@ function SourceView({ filePath, language, text }: { filePath: string; language: 
   )
 }
 
+// Editable code view: a CodeMirror 6 editor (line numbers, live syntax
+// highlighting, undo/redo, bracket matching, search, multi-cursor) that is
+// editable by default. Save is manual — Cmd/Ctrl+S writes the buffer to disk;
+// unsaved changes are signalled by the amber dot on the preview tab. Cmd/Ctrl+L
+// adds the selected lines to the chat composer as a file ref (restores the old
+// SourceView gesture).
+function EditableCodeView({
+  filePath,
+  initialText,
+  language,
+  docKey,
+  headerExtra,
+  onSaved
+}: {
+  filePath: string
+  initialText: string
+  language?: string
+  docKey: number | string
+  headerExtra?: ReactNode
+  onSaved: (text: string) => void
+}) {
+  const { t } = useI18n()
+  const { renderedMode } = useTheme()
+  const [value, setValue] = useState(initialText)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<null | string>(null)
+  // Track the last text we know is on disk so the dirty flag survives saves and
+  // external reloads (which re-seed via docKey + a new initialText).
+  const [savedText, setSavedText] = useState(initialText)
+  const dirty = value !== savedText
+
+  // Refs so the Cmd+S keymap (which closes over the editor instance created
+  // once) always sees the freshest text and saved baseline.
+  const valueRef = useRef(value)
+  const savedTextRef = useRef(savedText)
+  const savingRef = useRef(saving)
+  valueRef.current = value
+  savedTextRef.current = savedText
+  savingRef.current = saving
+
+  // Re-seed only when the source file actually changes (docKey). NOT on
+  // `initialText` — saving feeds the new text back up through onSaved, which
+  // would otherwise re-run this effect and reset the cursor/scroll mid-edit.
+  const initialTextRef = useRef(initialText)
+  initialTextRef.current = initialText
+  useEffect(() => {
+    setValue(initialTextRef.current)
+    setSavedText(initialTextRef.current)
+    setError(null)
+  }, [docKey])
+
+  // Manual save only — triggered by Cmd/Ctrl+S. No autosave.
+  const save = useCallback(async () => {
+    if (savingRef.current || valueRef.current === savedTextRef.current) {
+      return
+    }
+
+    const text = valueRef.current
+    setSaving(true)
+    setError(null)
+
+    try {
+      await writeDesktopFileText(filePath, text)
+      // Mark BEFORE onSaved so the file-change watcher (which may fire almost
+      // immediately) knows this change was ours and skips the reload.
+      markPreviewFileSelfSaved(filePath)
+      setSavedText(text)
+      onSaved(text)
+    } catch (err) {
+      let message = err instanceof Error ? err.message : String(err)
+
+      // The write IPC handler ships with the Electron main process; a dev
+      // session started before it was added throws this until restarted.
+      if (message.includes('No handler registered')) {
+        message = 'Saving needs an app restart (restart the dev server / app).'
+      }
+
+      setError((t.preview.saveFailed ?? ((m: string) => `Save failed: ${m}`))(message))
+    } finally {
+      setSaving(false)
+    }
+  }, [filePath, onSaved, t.preview])
+
+  // Publish the unsaved state so the preview tab can show the JetBrains-style
+  // dot on the matching tab. Clear it on unmount / file change.
+  useEffect(() => {
+    setPreviewFileDirty(filePath, dirty)
+  }, [filePath, dirty])
+
+  useEffect(() => () => setPreviewFileDirty(filePath, false), [filePath])
+
+  return (
+    <div className="relative flex h-full min-h-0 flex-col">
+      {headerExtra && (
+        <div className="flex items-center justify-end gap-2 border-b border-border/40 px-3 py-1.5 text-[0.6875rem]">
+          {headerExtra}
+        </div>
+      )}
+      <CodeEditor
+        className="flex-1"
+        dark={renderedMode === 'dark'}
+        docKey={docKey}
+        filename={filePath}
+        language={language}
+        onAddSelectionRef={({ end, start }) => {
+          const lineEnd = end > start ? end : undefined
+          const ref = droppedFileInlineRef({ line: start, lineEnd, path: filePath }, $currentCwd.get())
+
+          if (!ref) {
+            return
+          }
+
+          requestComposerInsertRefs([ref])
+          requestComposerFocus('main')
+        }}
+        onChange={setValue}
+        onSave={() => void save()}
+        value={initialText}
+      />
+      {/* Save failures must not be silent now that the status header is gone —
+          surface them as a dismissible toast pinned to the editor's bottom. */}
+      {error && (
+        <button
+          className="absolute inset-x-3 bottom-3 z-10 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-left text-[0.6875rem] text-destructive shadow-sm"
+          onClick={() => setError(null)}
+          type="button"
+        >
+          {error}
+        </button>
+      )}
+    </div>
+  )
+}
+
 export function LocalFilePreview({ reloadKey, target }: { reloadKey: number; target: PreviewTarget }) {
   const { t } = useI18n()
   const [state, setState] = useState<LocalPreviewState>({ loading: true })
   const [forcePreview, setForcePreview] = useState(false)
-  const [renderMarkdownAsSource, setRenderMarkdownAsSource] = useState(false)
+  // Markdown is editable by default; this opts into the rendered preview.
+  const [markdownRendered, setMarkdownRendered] = useState(false)
   const filePath = filePathForTarget(target)
   const isImage = target.previewKind === 'image'
+
+  // Reset to the editor when the previewed file changes.
+  useEffect(() => {
+    setMarkdownRendered(false)
+  }, [filePath, reloadKey])
 
   // HTML files are rendered as source code, not in a webview - so they take
   // the same path as plain text files. `previewKind === 'binary'` arrives
@@ -571,21 +697,67 @@ export function LocalFilePreview({ reloadKey, target }: { reloadKey: number; tar
 
   if (isText && state.text !== undefined) {
     const isMarkdown = (state.language || target.language) === 'markdown'
-    const showRendered = isMarkdown && !renderMarkdownAsSource
+    const language = state.language || target.language || 'text'
+    // Editing writes the whole buffer back, so refuse it for truncated reads
+    // (we only loaded the first slice and would clobber the rest of the file).
+    const canEdit = !state.truncated
+    const docKey = `${filePath}:${reloadKey}`
 
-    return (
-      <div className="h-full overflow-auto bg-transparent">
-        {state.truncated && (
+    // Truncated reads stay read-only — we only loaded a slice of the file.
+    if (!canEdit) {
+      return (
+        <div className="h-full overflow-auto bg-transparent">
           <div className="border-b border-border/60 bg-muted/35 px-3 py-1.5 text-[0.68rem] text-muted-foreground">
             {t.preview.truncated}
           </div>
-        )}
-        {isMarkdown && <PreviewToggle asSource={!showRendered} onToggle={() => setRenderMarkdownAsSource(s => !s)} />}
-        {showRendered ? (
-          <MarkdownPreview text={state.text} />
-        ) : (
-          <SourceView filePath={filePath} language={state.language || 'text'} text={state.text} />
-        )}
+          <SourceView filePath={filePath} language={language} text={state.text} />
+        </div>
+      )
+    }
+
+    // Markdown can flip to a rendered preview (opt-in); the editor is still the
+    // default so .md files are editable on open like every other text file.
+    if (isMarkdown && markdownRendered) {
+      return (
+        <div className="flex h-full flex-col overflow-hidden bg-transparent">
+          <div className="flex items-center justify-end border-b border-border/40 px-3 py-1.5">
+            <button
+              className="text-[0.625rem] font-bold text-muted-foreground underline decoration-current/20 underline-offset-4 transition-colors hover:text-foreground"
+              onClick={() => setMarkdownRendered(false)}
+              type="button"
+            >
+              {(t.preview.edit ?? 'Edit').toUpperCase()}
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto">
+            <MarkdownPreview text={state.text} />
+          </div>
+        </div>
+      )
+    }
+
+    // Editable by default: a CodeMirror editor for code/text (and markdown).
+    // Edits autosave to disk. Markdown gets a "Preview" toggle in the header.
+    return (
+      <div className="flex h-full flex-col overflow-hidden bg-transparent">
+        <EditableCodeView
+          docKey={docKey}
+          filePath={filePath}
+          headerExtra={
+            isMarkdown ? (
+              <button
+                className="font-bold text-muted-foreground underline decoration-current/20 underline-offset-4 transition-colors hover:text-foreground"
+                onClick={() => setMarkdownRendered(true)}
+                type="button"
+              >
+                {t.preview.renderedPreview}
+              </button>
+            ) : undefined
+          }
+          initialText={state.text}
+          language={language}
+          onSaved={savedText => setState(prev => ({ ...prev, text: savedText }))}
+        />
       </div>
     )
   }

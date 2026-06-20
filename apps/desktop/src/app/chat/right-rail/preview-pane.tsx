@@ -9,7 +9,7 @@ import { isDesktopFsRemoteMode } from '@/lib/desktop-fs'
 import { Bug } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { notify, notifyError } from '@/store/notifications'
-import { $previewServerRestart, failPreviewServerRestart, type PreviewTarget } from '@/store/preview'
+import { $previewServerRestart, consumePreviewSelfSave, failPreviewServerRestart, type PreviewTarget } from '@/store/preview'
 
 import {
   clampConsoleHeight,
@@ -20,7 +20,7 @@ import {
   PreviewConsoleTitlebarIcon
 } from './preview-console'
 import { type ConsoleEntry, createPreviewConsoleState } from './preview-console-state'
-import { LocalFilePreview, PreviewEmptyState } from './preview-file'
+import { filePathForTarget, LocalFilePreview, PreviewEmptyState } from './preview-file'
 
 type PreviewWebview = HTMLElement & {
   closeDevTools?: () => void
@@ -425,6 +425,15 @@ export function PreviewPane({
         return
       }
 
+      // Ignore reloads triggered by the inline editor's own save — reloading
+      // would reseed the editor and reset the cursor mid-edit.
+      if (consumePreviewSelfSave(filePathForTarget(target))) {
+        pendingReloadCount = 0
+        pendingReloadUrl = ''
+
+        return
+      }
+
       const changedCount = pendingReloadCount
       const changedUrl = pendingReloadUrl
 
@@ -490,6 +499,9 @@ export function PreviewPane({
         void window.hermesDesktop?.stopPreviewFileWatch?.(watchId)
       }
     }
+    // filePathForTarget only reads target.path/url, already in the deps; the
+    // whole `target` object isn't needed and would re-subscribe needlessly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appendConsoleEntry, copy, reloadPreview, target.kind, target.url])
 
   useEffect(() => {
