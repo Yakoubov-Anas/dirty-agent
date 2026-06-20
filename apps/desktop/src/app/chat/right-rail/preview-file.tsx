@@ -14,15 +14,12 @@ import { Streamdown } from 'streamdown'
 import { requestComposerFocus, requestComposerInsertRefs } from '@/app/chat/composer/focus'
 import { droppedFileInlineRef } from '@/app/chat/composer/inline-refs'
 import { HERMES_PATHS_MIME } from '@/app/chat/hooks/use-composer-actions'
-import { revealPathInTree } from '@/app/right-sidebar/files/use-project-tree'
 import { isAddSelectionShortcut } from '@/app/right-sidebar/terminal/selection'
 import { PageLoader } from '@/components/page-loader'
 import { CodeEditor } from '@/components/ui/code-editor'
-import { Codicon } from '@/components/ui/codicon'
 import { translateNow, useI18n } from '@/i18n'
 import { readDesktopFileDataUrl, readDesktopFileText, writeDesktopFileText } from '@/lib/desktop-fs'
 import { cn } from '@/lib/utils'
-import { relativePathFromCwd } from '@/lib/workspace-path'
 import {
   $editorReveal,
   consumeEditorReveal,
@@ -162,72 +159,6 @@ export function filePathForTarget(target: PreviewTarget) {
 /** Re-exported for the preview tab menu; the implementation lives in the shared
  *  workspace-path lib so the file tree can use it too. */
 export { relativePathFromCwd } from '@/lib/workspace-path'
-
-interface BreadcrumbSegment {
-  name: string
-  path: string
-}
-
-/** Ancestor + self crumbs for `filePath` under `cwd`, each carrying the
- *  absolute path so a click can reveal that folder/file in the tree. Empty when
- *  the file is outside the workspace (no in-tree target to point at). */
-function breadcrumbSegments(cwd: string, filePath: string): BreadcrumbSegment[] {
-  const rel = relativePathFromCwd(cwd, filePath)
-
-  if (!rel) {
-    return []
-  }
-
-  const sep = filePath.includes('\\') ? '\\' : '/'
-  let acc = cwd.replace(/[\\/]+$/, '')
-
-  return rel.split(/[\\/]/).map(name => {
-    acc = `${acc}${sep}${name}`
-
-    return { name, path: acc }
-  })
-}
-
-/** Thin clickable path bar above the editor. Each crumb reveals its folder/file
- *  in the project tree. Renders nothing when the file is outside the workspace. */
-function FileBreadcrumb({ filePath }: { filePath: string }) {
-  const cwd = useStore($currentCwd).trim()
-  const segments = breadcrumbSegments(cwd, filePath)
-
-  if (segments.length === 0) {
-    return null
-  }
-
-  return (
-    <nav
-      aria-label={translateNow('preview.breadcrumbAria')}
-      className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border/40 px-3 py-1 text-[0.6875rem] text-muted-foreground [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-    >
-      {segments.map((segment, index) => {
-        const isLast = index === segments.length - 1
-
-        return (
-          <span className="flex shrink-0 items-center gap-0.5" key={segment.path}>
-            {index > 0 && (
-              <Codicon aria-hidden className="text-muted-foreground/50" name="chevron-right" size="0.75rem" />
-            )}
-            <button
-              className={cn(
-                'max-w-40 truncate rounded-sm px-1 py-0.5 transition-colors hover:bg-accent hover:text-foreground',
-                isLast && 'font-medium text-foreground'
-              )}
-              onClick={() => void revealPathInTree(segment.path)}
-              title={segment.path}
-              type="button"
-            >
-              {segment.name}
-            </button>
-          </span>
-        )
-      })}
-    </nav>
-  )
-}
 
 function formatBytes(bytes: number | undefined) {
   if (!bytes) {
@@ -625,7 +556,6 @@ function EditableCodeView({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col">
-      <FileBreadcrumb filePath={filePath} />
       {headerExtra && (
         <div className="flex items-center justify-end gap-2 border-b border-border/40 px-3 py-1.5 text-[0.6875rem]">
           {headerExtra}

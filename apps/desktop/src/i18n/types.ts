@@ -1343,7 +1343,6 @@ export interface Translations {
     revealInOSFailed?: string
     closeTabLabel?: string
     closeOthers?: string
-    breadcrumbAria?: string
     console: {
       deselect: string
       select: string
