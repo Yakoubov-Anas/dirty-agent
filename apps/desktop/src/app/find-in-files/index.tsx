@@ -66,6 +66,8 @@ export function FindInFilesDialog() {
   const [error, setError] = useState<null | string>(null)
   const [replacing, setReplacing] = useState(false)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  // When true, render every match row instead of capping at MAX_RENDERED_ROWS.
+  const [showAll, setShowAll] = useState(false)
   const searchRef = useRef<HTMLInputElement | null>(null)
   // Signature of the params the current `result` was fetched for. The effect
   // skips refetching when nothing relevant changed (reopen, focus toggles,
@@ -121,6 +123,7 @@ export function FindInFilesDialog() {
         if (!cancelled) {
           setResult(res)
           setError(null)
+          setShowAll(false)
           lastSearchKey.current = searchKey({ caseSensitive, query, regexp, wholeWord })
         }
       } catch (err) {
@@ -157,7 +160,7 @@ export function FindInFilesDialog() {
       return []
     }
 
-    let budget = MAX_RENDERED_ROWS
+    let budget = showAll ? Number.POSITIVE_INFINITY : MAX_RENDERED_ROWS
     const out: Array<{ file: FileSearchFile; shown: FileSearchFile['matches'] }> = []
 
     for (const file of result.files) {
@@ -172,7 +175,7 @@ export function FindInFilesDialog() {
     }
 
     return out
-  }, [result, collapsed])
+  }, [result, collapsed, showAll])
 
   const renderedRows = visibleFiles.reduce((sum, f) => sum + f.shown.length, 0)
   const hiddenRows = matchCount - renderedRows
@@ -391,8 +394,13 @@ export function FindInFilesDialog() {
             )
           })}
           {hiddenRows > 0 && (
-            <div className="px-3 py-2 text-center text-[0.6875rem] text-muted-foreground">
-              {hiddenRows} more match{hiddenRows === 1 ? '' : 'es'} hidden — refine your search to narrow results.
+            <div className="flex flex-col items-center gap-1 px-3 py-2 text-center text-[0.6875rem] text-muted-foreground">
+              <span>
+                {hiddenRows} more match{hiddenRows === 1 ? '' : 'es'} hidden for performance.
+              </span>
+              <Button onClick={() => setShowAll(true)} size="xs" type="button" variant="secondary">
+                Show all
+              </Button>
             </div>
           )}
         </div>
