@@ -105,9 +105,15 @@ export function AppShell({
   const leftEdgePaneOpen =
     !isSecondaryWindow() && ((!narrowViewport && collapsibleLeftPaneOpen) || persistentLeftPaneOpen)
 
-  const titlebarContentInset = leftEdgePaneOpen
+  // The dedicated header bar (a full-width block above the panes) always covers
+  // the window's top edge, so pane headers below it never sit under the macOS
+  // traffic lights — no content inset needed. Secondary windows have no bar, so
+  // they keep the original edge-dodging behavior.
+  const titlebarContentInset = !hideTitlebarControls
     ? 0
-    : titlebarControls.left + TITLEBAR_HEIGHT + Math.round(TITLEBAR_HEIGHT / 2)
+    : leftEdgePaneOpen
+      ? 0
+      : titlebarControls.left + TITLEBAR_HEIGHT + Math.round(TITLEBAR_HEIGHT / 2)
 
   // The static system cluster (haptics, profiles, settings, right-sidebar) is
   // hardcoded in TitlebarControls. Pane-supplied tools (preview's group) render
@@ -153,6 +159,10 @@ export function AppShell({
           // pane track via PaneShell's emitted --pane-chat-sidebar-width.
           '--sidebar-width': 'var(--pane-chat-sidebar-width)',
           '--titlebar-height': `${TITLEBAR_HEIGHT}px`,
+          // Panes reserve the titlebar zone only when there's no dedicated header
+          // bar (secondary windows). With the bar present, the bar owns that
+          // height and panes start flush below it — reserve 0 to avoid a gap.
+          '--pane-header-reserve': hideTitlebarControls ? `${TITLEBAR_HEIGHT}px` : '0px',
           '--titlebar-content-inset': `${titlebarContentInset}px`,
           '--titlebar-controls-left': `${titlebarControls.left}px`,
           '--titlebar-controls-top': `${titlebarControls.top}px`,
@@ -167,19 +177,37 @@ export function AppShell({
       }
     >
       {!hideTitlebarControls && (
-        <TitlebarControls leftTools={leftTitlebarTools} onOpenSettings={onOpenSettings} tools={titlebarTools} />
+        <>
+          {/* Dedicated full-width header block. Sits above every pane as its own
+              row (its height pushes <main> down), giving the window/system
+              controls their own band separated from the panels below. The
+              controls themselves stay `fixed` and land on this bar; the bar
+              supplies the solid background, bottom divider, and drag region. */}
+          <div
+            aria-hidden="true"
+            className="relative z-10 h-(--titlebar-height) w-full shrink-0 border-b border-(--ui-stroke-tertiary) bg-(--ui-chat-surface-background) [-webkit-app-region:drag]"
+          />
+          <TitlebarControls leftTools={leftTitlebarTools} onOpenSettings={onOpenSettings} tools={titlebarTools} />
+        </>
       )}
 
       <main className="relative z-3 flex min-h-0 w-full flex-1 flex-col overflow-hidden transition-none">
         <PaneShell className="min-h-0 flex-1">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute left-0 top-0 z-1 h-(--titlebar-height) w-(--titlebar-controls-left) [-webkit-app-region:drag]"
-          />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute top-0 z-1 h-(--titlebar-height) left-[calc(var(--titlebar-controls-left)+(var(--titlebar-control-size)*2)+0.75rem)] right-[calc(var(--titlebar-tools-right)+var(--titlebar-tools-width)+0.75rem)] [-webkit-app-region:drag]"
-          />
+          {/* Secondary windows have no header bar, so the titlebar zone lives at
+              the top of the panes — keep it draggable there. Normal windows drag
+              from the dedicated header bar instead. */}
+          {hideTitlebarControls && (
+            <>
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute left-0 top-0 z-1 h-(--titlebar-height) w-(--titlebar-controls-left) [-webkit-app-region:drag]"
+              />
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute top-0 z-1 h-(--titlebar-height) left-[calc(var(--titlebar-controls-left)+(var(--titlebar-control-size)*2)+0.75rem)] right-[calc(var(--titlebar-tools-right)+var(--titlebar-tools-width)+0.75rem)] [-webkit-app-region:drag]"
+              />
+            </>
+          )}
 
           {children}
         </PaneShell>

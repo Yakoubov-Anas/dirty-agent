@@ -1123,7 +1123,7 @@ export function DesktopController() {
       side={railSide}
       width="42vw"
     >
-      <div className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-(--ui-editor-surface-background) pt-(--titlebar-height)">
+      <div className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-(--ui-editor-surface-background) pt-(--pane-header-reserve)">
         <TerminalSlot />
       </div>
     </Pane>
