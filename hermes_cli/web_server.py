@@ -1973,6 +1973,111 @@ async def fs_replace(payload: FsReplace):
     return {"filesChanged": files_changed, "replacements": replacements}
 
 
+# ---------------------------------------------------------------------------
+# Fuzzy file-name finder (JetBrains "Go to File" / double-Shift)
+# ---------------------------------------------------------------------------
+
+_FS_FIND_FILES_MAX = 200
+_FS_FIND_FILES_SCAN_CAP = 20000
+
+
+def _fs_list_files(root: Path) -> list[str]:
+    """List repo-relative file paths under root. Prefers ripgrep (honours
+    .gitignore) and falls back to os.walk with the usual skip dirs."""
+    rg = shutil.which("rg")
+    if rg:
+        try:
+            proc = subprocess.run(
+                [rg, "--files", str(root)], capture_output=True, timeout=20
+            )
+            if proc.returncode in (0, 1):
+                out = (proc.stdout or b"").decode("utf-8", errors="replace")
+                return out.splitlines()[:_FS_FIND_FILES_SCAN_CAP]
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+
+    files: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in _FS_SEARCH_SKIP_DIRS]
+        for name in filenames:
+            files.append(str(Path(dirpath) / name))
+            if len(files) >= _FS_FIND_FILES_SCAN_CAP:
+                return files
+    return files
+
+
+def _fuzzy_score(query: str, text: str) -> Optional[int]:
+    """Subsequence fuzzy match (case-insensitive). Lower score = better. None
+    when `query` isn't a subsequence of `text`. Rewards contiguous runs and
+    matches near the basename."""
+    if not query:
+        return 0
+
+    q = query.lower()
+    t = text.lower()
+    score = 0
+    ti = 0
+    last = -1
+    slash = max(t.rfind("/"), t.rfind("\\"))
+
+    for ch in q:
+        idx = t.find(ch, ti)
+        if idx == -1:
+            return None
+        # Gap penalty (non-contiguous), plus a small bonus for matching in the
+        # file name rather than the directory portion.
+        if last != -1:
+            score += idx - last - 1
+        if idx <= slash:
+            score += 1
+        last = idx
+        ti = idx + 1
+
+    return score
+
+
+class FsFindFiles(BaseModel):
+    query: str
+    root: Optional[str] = None
+
+
+@app.post("/api/fs/find-files")
+async def fs_find_files(payload: FsFindFiles):
+    root = _fs_search_root(payload.root)
+    all_files = _fs_list_files(root)
+
+    query = payload.query.strip()
+    if not query:
+        # No query → most-recently-modified files (a useful default list).
+        scored = []
+        for path in all_files:
+            try:
+                mtime = os.path.getmtime(path)
+            except OSError:
+                mtime = 0.0
+            scored.append((-mtime, path))
+        scored.sort()
+        files = [p for _, p in scored[:_FS_FIND_FILES_MAX]]
+        return {"files": files, "truncated": len(all_files) > _FS_FIND_FILES_MAX}
+
+    ranked: list[tuple[int, str]] = []
+    for path in all_files:
+        name = os.path.basename(path)
+        # Score against the basename first (cheaper, what users usually type),
+        # falling back to the full relative path.
+        s = _fuzzy_score(query, name)
+        if s is None:
+            s = _fuzzy_score(query, path)
+            if s is None:
+                continue
+            s += 50  # prefer name matches over deep-path matches
+        ranked.append((s, path))
+
+    ranked.sort(key=lambda item: (item[0], len(item[1]), item[1].lower()))
+    files = [p for _, p in ranked[:_FS_FIND_FILES_MAX]]
+    return {"files": files, "truncated": len(ranked) > _FS_FIND_FILES_MAX}
+
+
 @app.get("/api/fs/read-data-url")
 async def fs_read_data_url(path: str):
     target, st = _fs_regular_file(_fs_path(path))

@@ -280,3 +280,42 @@ def test_fs_search_handles_non_ascii_content(client, tmp_path):
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 2
+
+
+def test_fs_find_files_fuzzy(client, tmp_path):
+    root = tmp_path / "proj"
+    (root / "src").mkdir(parents=True)
+    (root / "src" / "code-editor.tsx").write_text("x")
+    (root / "src" / "model-edit.tsx").write_text("x")
+    (root / "README.md").write_text("x")
+
+    response = client.post("/api/fs/find-files", json={"query": "codeedit", "root": str(root)})
+
+    assert response.status_code == 200
+    files = response.json()["files"]
+    assert files, "expected at least one fuzzy match"
+    assert Path(files[0]).name == "code-editor.tsx"  # best match ranks first
+
+
+def test_fs_find_files_empty_query_lists_recent(client, tmp_path):
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "a.txt").write_text("x")
+    (root / "b.txt").write_text("x")
+
+    response = client.post("/api/fs/find-files", json={"query": "", "root": str(root)})
+
+    assert response.status_code == 200
+    names = {Path(p).name for p in response.json()["files"]}
+    assert names == {"a.txt", "b.txt"}
+
+
+def test_fs_find_files_no_match(client, tmp_path):
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "a.txt").write_text("x")
+
+    response = client.post("/api/fs/find-files", json={"query": "zzzzz", "root": str(root)})
+
+    assert response.status_code == 200
+    assert response.json()["files"] == []

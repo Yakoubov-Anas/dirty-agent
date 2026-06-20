@@ -8,6 +8,7 @@ import { PROFILE_SLOT_COUNT, SESSION_SLOT_COUNT } from '@/lib/keybinds/actions'
 import { comboAllowedInInput, comboFromEvent, isEditableTarget } from '@/lib/keybinds/combo'
 import { toggleCommandPalette } from '@/store/command-palette'
 import { openFindInFiles } from '@/store/find-in-files'
+import { openGoToFile } from '@/store/go-to-file'
 import { $capture, $comboIndex, endCapture, setBinding, toggleKeybindPanel } from '@/store/keybinds'
 import {
   CHAT_SIDEBAR_PANE_ID,
@@ -173,7 +174,29 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
   }
 
   useEffect(() => {
+    // Double-Shift tracking for the Go-to-File shortcut.
+    const DOUBLE_SHIFT_MS = 350
+    let lastShiftAt = 0
+
     const onKeyDown = (event: KeyboardEvent) => {
+      // Double-tap Shift → Go to File (JetBrains "Search Everywhere"). Two
+      // bare-Shift presses within the window, with no other key in between.
+      if (event.key === 'Shift' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.repeat) {
+        const now = Date.now()
+
+        if (now - lastShiftAt < DOUBLE_SHIFT_MS) {
+          lastShiftAt = 0
+          openGoToFile()
+
+          return
+        }
+
+        lastShiftAt = now
+      } else if (event.key !== 'Shift') {
+        // Any other key cancels a pending first-Shift.
+        lastShiftAt = 0
+      }
+
       // Capture mode: the next real key becomes the binding. Swallow everything
       // so e.g. ⌘K rebinds instead of opening the palette.
       const capturing = $capture.get()

@@ -145,6 +145,21 @@ export async function replaceDesktopFiles(
   })
 }
 
+export interface FileFindResult {
+  files: string[]
+  truncated: boolean
+}
+
+// Fuzzy file-name finder (JetBrains "Go to File"). Empty query returns recent
+// files. Routed through the backend (ripgrep --files honours .gitignore).
+export async function findDesktopFilesByName(query: string, root?: string): Promise<FileFindResult> {
+  return bridge().api<FileFindResult>({
+    path: '/api/fs/find-files',
+    method: 'POST',
+    body: { query, root }
+  })
+}
+
 export async function desktopGitRoot(path: string): Promise<string | null> {
   const desktop = bridge()
 

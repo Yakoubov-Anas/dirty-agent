@@ -99,6 +99,7 @@ import { CommandPalette } from './command-palette'
 import { FindInFilesDialog } from './find-in-files'
 import { useGatewayBoot } from './gateway/hooks/use-gateway-boot'
 import { useGatewayRequest } from './gateway/hooks/use-gateway-request'
+import { GoToFileDialog } from './go-to-file'
 import { useKeybinds } from './hooks/use-keybinds'
 import { SIDEBAR_COLLAPSE_MEDIA_QUERY } from './layout-constants'
 import { ModelPickerOverlay } from './model-picker-overlay'
@@ -973,6 +974,7 @@ export function DesktopController() {
       <CommandPalette />
       <SessionSwitcher />
       <FindInFilesDialog />
+      <GoToFileDialog />
 
       {settingsOpen && (
         <Suspense fallback={null}>
