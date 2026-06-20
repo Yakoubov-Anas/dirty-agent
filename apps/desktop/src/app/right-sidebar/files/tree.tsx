@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { type NodeApi, type NodeRendererProps, Tree, type TreeApi } from 'react-arborist'
 
 import { PageLoader } from '@/components/page-loader'
@@ -25,6 +25,8 @@ interface ProjectTreeProps {
   onNodeOpenChange: (id: string, open: boolean) => void
   onPreviewFile?: (path: string) => void
   openState: Record<string, boolean>
+  revealNonce: number
+  revealSelection: string | null
 }
 
 export function ProjectTree({
@@ -36,7 +38,9 @@ export function ProjectTree({
   onLoadChildren,
   onNodeOpenChange,
   onPreviewFile,
-  openState
+  openState,
+  revealNonce,
+  revealSelection
 }: ProjectTreeProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const treeRef = useRef<TreeApi<TreeNode> | null>(null)
@@ -61,6 +65,25 @@ export function ProjectTree({
   }, [])
 
   useResizeObserver(syncTreeSize, containerRef)
+
+  // After a reveal request the tree has been remounted (revealNonce is part of
+  // its key) with every ancestor of the target expanded. Wait a frame for the
+  // virtualized list to mount, then select + scroll the revealed node into view.
+  useEffect(() => {
+    if (!revealSelection) {
+      return
+    }
+
+    const id = revealSelection
+
+    const raf = requestAnimationFrame(() => {
+      if (treeRef.current?.get(id)) {
+        treeRef.current.select(id, { align: 'center' })
+      }
+    })
+
+    return () => cancelAnimationFrame(raf)
+  }, [revealNonce, revealSelection])
 
   const handleToggle = useCallback(
     (id: string) => {
@@ -101,7 +124,7 @@ export function ProjectTree({
           height={size.height}
           indent={INDENT}
           initialOpenState={openState}
-          key={`${cwd}:${collapseNonce}`}
+          key={`${cwd}:${collapseNonce}:${revealNonce}`}
           onActivate={handleActivate}
           onToggle={handleToggle}
           openByDefault={false}

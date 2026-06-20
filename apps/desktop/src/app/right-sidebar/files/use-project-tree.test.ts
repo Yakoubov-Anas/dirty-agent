@@ -259,4 +259,67 @@ describe('useProjectTree', () => {
     await waitFor(() => expect(result.current.rootError).toBe('no-bridge'))
     expect(result.current.data).toEqual([])
   })
+
+  it('revealPath expands every ancestor folder, selects the file, and bumps the nonce', async () => {
+    readDir.mockImplementation(async path => {
+      if (path === '/p') return ok([{ name: 'src', path: '/p/src', isDirectory: true }])
+      if (path === '/p/src') return ok([{ name: 'lib', path: '/p/src/lib', isDirectory: true }])
+      if (path === '/p/src/lib') return ok([{ name: 'index.ts', path: '/p/src/lib/index.ts', isDirectory: false }])
+      throw new Error(`unexpected path ${path}`)
+    })
+
+    const { result } = renderHook(() => useProjectTree('/p'))
+
+    await waitFor(() => expect(result.current.data.length).toBe(1))
+
+    const nonceBefore = result.current.revealNonce
+
+    await act(async () => {
+      await result.current.revealPath('/p/src/lib/index.ts')
+    })
+
+    // Both intermediate folders were lazily loaded and marked open.
+    expect(readDir).toHaveBeenCalledWith('/p/src')
+    expect(readDir).toHaveBeenCalledWith('/p/src/lib')
+    expect(result.current.openState).toMatchObject({ '/p/src': true, '/p/src/lib': true })
+    expect(result.current.revealSelection).toBe('/p/src/lib/index.ts')
+    expect(result.current.revealNonce).toBe(nonceBefore + 1)
+  })
+
+  it('revealPath ignores a path outside the current cwd', async () => {
+    readDir.mockResolvedValueOnce(ok([{ name: 'src', path: '/p/src', isDirectory: true }]))
+
+    const { result } = renderHook(() => useProjectTree('/p'))
+
+    await waitFor(() => expect(result.current.data.length).toBe(1))
+
+    await act(async () => {
+      await result.current.revealPath('/other/file.ts')
+    })
+
+    expect(result.current.revealSelection).toBeNull()
+    expect(result.current.revealNonce).toBe(0)
+    // Only the mount read happened — no stray folder fetches.
+    expect(readDir).toHaveBeenCalledTimes(1)
+  })
+
+  it('revealPath matches across slash/backslash and case differences', async () => {
+    readDir.mockImplementation(async path => {
+      if (path === 'C:\\Proj') return ok([{ name: 'Src', path: 'C:\\Proj\\Src', isDirectory: true }])
+      if (path === 'C:\\Proj\\Src') return ok([{ name: 'App.ts', path: 'C:\\Proj\\Src\\App.ts', isDirectory: false }])
+      throw new Error(`unexpected path ${path}`)
+    })
+
+    const { result } = renderHook(() => useProjectTree('C:\\Proj'))
+
+    await waitFor(() => expect(result.current.data.length).toBe(1))
+
+    await act(async () => {
+      // A file: URL decodes to forward slashes + a leading slash; still resolves.
+      await result.current.revealPath('C:/proj/src/app.ts')
+    })
+
+    expect(result.current.openState).toMatchObject({ 'C:\\Proj\\Src': true })
+    expect(result.current.revealSelection).toBe('C:\\Proj\\Src\\App.ts')
+  })
 })

@@ -47,6 +47,51 @@ function patchNode(nodes: TreeNode[] | undefined | null, id: string, patch: (n: 
   })
 }
 
+function findNode(nodes: TreeNode[] | undefined, id: string): TreeNode | null {
+  if (!nodes) {
+    return null
+  }
+
+  for (const n of nodes) {
+    if (n.id === id) {
+      return n
+    }
+
+    const found = findNode(n.children, id)
+
+    if (found) {
+      return found
+    }
+  }
+
+  return null
+}
+
+/** Lowercase + forward-slash + no trailing slash, so a `file:` URL path and a
+ *  backslash filesystem id compare equal (and Windows case-insensitivity holds). */
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+}
+
+/** Path segments of `path` relative to `root`, or null when `path` is not
+ *  inside `root`. Comparison is separator- and case-insensitive. */
+function relativeSegments(root: string, path: string): string[] | null {
+  const nr = normalizePath(root)
+  const np = normalizePath(path)
+
+  if (np === nr) {
+    return []
+  }
+
+  const prefix = `${nr}/`
+
+  if (!np.startsWith(prefix)) {
+    return null
+  }
+
+  return np.slice(prefix.length).split('/').filter(Boolean)
+}
+
 function placeholderChild(parentId: string): TreeNode {
   return { id: `${parentId}::${PLACEHOLDER_ID}`, isDirectory: false, name: 'Loading…', placeholder: 'loading' }
 }
@@ -69,11 +114,18 @@ export interface UseProjectTreeResult {
    *  workspace dir. */
   effectiveCwd: string
   openState: Record<string, boolean>
+  /** Bumped each time a reveal is requested so the tree remounts with the
+   *  revealed path expanded, then selects + scrolls to it. */
+  revealNonce: number
+  /** Absolute path of the node to select/scroll after a reveal, or null. */
+  revealSelection: string | null
   rootError: string | null
   rootLoading: boolean
   collapseAll: () => void
   loadChildren: (id: string) => Promise<void>
   refreshRoot: () => Promise<void>
+  /** Expand every ancestor folder of `path` and select/scroll to it. */
+  revealPath: (path: string) => Promise<void>
   setNodeOpen: (id: string, open: boolean) => void
 }
 
@@ -86,6 +138,8 @@ interface ProjectTreeState {
   requestId: number
   /** Directory the displayed entries were read from ('' until first load). */
   resolvedCwd: string
+  revealNonce: number
+  revealSelection: string | null
   rootError: string | null
   rootLoading: boolean
 }
@@ -98,6 +152,8 @@ const initialState: ProjectTreeState = {
   openState: {},
   requestId: 0,
   resolvedCwd: '',
+  revealNonce: 0,
+  revealSelection: null,
   rootError: null,
   rootLoading: false
 }
@@ -176,6 +232,8 @@ async function loadRoot(cwd: string, { force = false }: { force?: boolean } = {}
     openState: current.cwd === cwd ? current.openState : {},
     requestId,
     resolvedCwd: '',
+    revealNonce: current.cwd === cwd ? current.revealNonce : 0,
+    revealSelection: null,
     rootError: null,
     rootLoading: true
   })
@@ -308,6 +366,83 @@ export function useProjectTree(cwd: string): UseProjectTreeResult {
     [cwd]
   )
 
+  const revealPath = useCallback(
+    async (path: string) => {
+      if (!cwd || !path) {
+        return
+      }
+
+      const root = $projectTree.get().resolvedCwd || cwd
+      const segments = relativeSegments(root, path)
+
+      if (!segments || segments.length === 0) {
+        return
+      }
+
+      // Walk the segment chain from the root, loading each directory's children
+      // before descending so the lazy tree contains every ancestor by the time
+      // we remount. `id`s are matched by name (case-insensitive) to survive the
+      // backslash-vs-slash difference between filesystem ids and `file:` URLs.
+      let level: TreeNode[] = $projectTree.get().data
+      const ancestorIds: string[] = []
+      let selectionId: string | null = null
+
+      for (let i = 0; i < segments.length; i += 1) {
+        const isLast = i === segments.length - 1
+        const seg = segments[i].toLowerCase()
+        const node = level.find(n => !n.placeholder && n.name.toLowerCase() === seg)
+
+        if (!node) {
+          return
+        }
+
+        if (isLast) {
+          selectionId = node.id
+
+          break
+        }
+
+        ancestorIds.push(node.id)
+
+        if (node.children === undefined && !node.loading) {
+          await loadChildren(node.id)
+        }
+
+        if ($projectTree.get().cwd !== cwd) {
+          return
+        }
+
+        level = findNode($projectTree.get().data, node.id)?.children ?? []
+      }
+
+      if (!selectionId) {
+        return
+      }
+
+      const id = selectionId
+
+      setProjectTree(current => {
+        if (current.cwd !== cwd) {
+          return current
+        }
+
+        const openState = { ...current.openState }
+
+        for (const ancestorId of ancestorIds) {
+          openState[ancestorId] = true
+        }
+
+        return {
+          ...current,
+          openState,
+          revealNonce: current.revealNonce + 1,
+          revealSelection: id
+        }
+      })
+    },
+    [cwd, loadChildren]
+  )
+
   useEffect(() => {
     const connectionChanged = lastConnectionKey !== '' && lastConnectionKey !== connectionKey
     lastConnectionKey = connectionKey
@@ -370,6 +505,9 @@ export function useProjectTree(cwd: string): UseProjectTreeResult {
       loadChildren,
       openState: state.cwd === cwd ? state.openState : {},
       refreshRoot,
+      revealNonce: state.cwd === cwd ? state.revealNonce : 0,
+      revealPath,
+      revealSelection: state.cwd === cwd ? state.revealSelection : null,
       rootError: state.cwd === cwd ? state.rootError : null,
       rootLoading: state.cwd === cwd ? state.rootLoading : Boolean(cwd),
       setNodeOpen
@@ -379,12 +517,15 @@ export function useProjectTree(cwd: string): UseProjectTreeResult {
       cwd,
       loadChildren,
       refreshRoot,
+      revealPath,
       setNodeOpen,
       state.collapseNonce,
       state.cwd,
       state.data,
       state.openState,
       state.resolvedCwd,
+      state.revealNonce,
+      state.revealSelection,
       state.rootError,
       state.rootLoading
     ]

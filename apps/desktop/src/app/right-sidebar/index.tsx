@@ -11,9 +11,10 @@ import { normalizeOrLocalPreviewTarget } from '@/lib/local-preview'
 import { cn } from '@/lib/utils'
 import { $panesFlipped } from '@/store/layout'
 import { notifyError } from '@/store/notifications'
-import { setCurrentSessionPreviewTarget } from '@/store/preview'
+import { $filePreviewTarget, setCurrentSessionPreviewTarget } from '@/store/preview'
 import { $currentCwd } from '@/store/session'
 
+import { filePathForTarget } from '../chat/right-rail/preview-file'
 import { SidebarPanelLabel } from '../shell/sidebar-label'
 
 import { RemoteFolderPicker } from './files/remote-picker'
@@ -32,6 +33,8 @@ export function RightSidebarPane({ onActivateFile, onActivateFolder, onChangeCwd
   const panesFlipped = useStore($panesFlipped)
   const currentCwd = useStore($currentCwd).trim()
   const hasCwd = currentCwd.length > 0
+  const openFileTarget = useStore($filePreviewTarget)
+  const openFilePath = openFileTarget ? filePathForTarget(openFileTarget) : null
 
   const {
     collapseAll,
@@ -41,6 +44,9 @@ export function RightSidebarPane({ onActivateFile, onActivateFolder, onChangeCwd
     loadChildren,
     openState,
     refreshRoot,
+    revealNonce,
+    revealPath,
+    revealSelection,
     rootError,
     rootLoading,
     setNodeOpen
@@ -96,6 +102,7 @@ export function RightSidebarPane({ onActivateFile, onActivateFolder, onChangeCwd
 
       <FilesystemTab
         canCollapse={canCollapse}
+        canRevealFile={hasCwd && Boolean(openFilePath)}
         collapseNonce={collapseNonce}
         cwd={effectiveCwd}
         cwdName={cwdName}
@@ -110,8 +117,15 @@ export function RightSidebarPane({ onActivateFile, onActivateFolder, onChangeCwd
         onLoadChildren={loadChildren}
         onNodeOpenChange={setNodeOpen}
         onPreviewFile={previewFile}
-        onRefresh={() => void refreshRoot()}
+        onRefreshTree={() => void refreshRoot()}
+        onRevealFile={() => {
+          if (openFilePath) {
+            void revealPath(openFilePath)
+          }
+        }}
         openState={openState}
+        revealNonce={revealNonce}
+        revealSelection={revealSelection}
       />
     </aside>
   )
@@ -119,11 +133,13 @@ export function RightSidebarPane({ onActivateFile, onActivateFolder, onChangeCwd
 
 interface FilesystemTabProps extends FileTreeBodyProps {
   canCollapse: boolean
+  canRevealFile: boolean
   cwdName: string
   hasCwd: boolean
   onChangeFolder: () => Promise<void> | void
   onCollapseAll: () => void
-  onRefresh: () => void
+  onRefreshTree: () => void
+  onRevealFile: () => void
 }
 
 // Sidebar palette + hover-reveal: header actions stay reachable while moving
@@ -135,6 +151,7 @@ const HEADER_ACTION_LABEL_REVEAL = `${HEADER_ACTION_CLASS} pointer-events-none o
 
 function FilesystemTab({
   canCollapse,
+  canRevealFile,
   collapseNonce,
   cwd,
   cwdName,
@@ -149,8 +166,11 @@ function FilesystemTab({
   onLoadChildren,
   onNodeOpenChange,
   onPreviewFile,
-  onRefresh,
-  openState
+  onRefreshTree,
+  onRevealFile,
+  openState,
+  revealNonce,
+  revealSelection
 }: FilesystemTabProps) {
   const { t } = useI18n()
   const r = t.rightSidebar
@@ -171,7 +191,7 @@ function FilesystemTab({
           aria-label={r.refreshTree}
           className={HEADER_ACTION_LABEL_REVEAL}
           disabled={!hasCwd || loading}
-          onClick={onRefresh}
+          onClick={onRefreshTree}
           size="icon-xs"
           variant="ghost"
         >
@@ -185,6 +205,16 @@ function FilesystemTab({
           variant="ghost"
         >
           <Codicon name="folder-opened" size="0.8125rem" />
+        </Button>
+        <Button
+          aria-label={r.revealFile}
+          className={cn(HEADER_ACTION_CLASS, !canRevealFile && 'pointer-events-none opacity-0')}
+          disabled={!canRevealFile}
+          onClick={onRevealFile}
+          size="icon-xs"
+          variant="ghost"
+        >
+          <Codicon name="target" size="0.8125rem" />
         </Button>
         <Button
           aria-label={r.collapseAll}
@@ -208,8 +238,10 @@ function FilesystemTab({
         onLoadChildren={onLoadChildren}
         onNodeOpenChange={onNodeOpenChange}
         onPreviewFile={onPreviewFile}
-        onRetry={onRefresh}
+        onRetry={onRefreshTree}
         openState={openState}
+        revealNonce={revealNonce}
+        revealSelection={revealSelection}
       />
     </div>
   )
@@ -234,6 +266,8 @@ interface FileTreeBodyProps {
    *  is the impatient-user path. */
   onRetry?: () => void
   openState: ReturnType<typeof useProjectTree>['openState']
+  revealNonce: number
+  revealSelection: string | null
 }
 
 function FileTreeBody({
@@ -248,7 +282,9 @@ function FileTreeBody({
   onNodeOpenChange,
   onPreviewFile,
   onRetry,
-  openState
+  openState,
+  revealNonce,
+  revealSelection
 }: FileTreeBodyProps) {
   const { t } = useI18n()
   const r = t.rightSidebar
@@ -309,6 +345,8 @@ function FileTreeBody({
         onNodeOpenChange={onNodeOpenChange}
         onPreviewFile={onPreviewFile}
         openState={openState}
+        revealNonce={revealNonce}
+        revealSelection={revealSelection}
       />
     </ErrorBoundary>
   )
