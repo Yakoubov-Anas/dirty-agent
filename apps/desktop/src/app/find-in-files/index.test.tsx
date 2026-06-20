@@ -53,6 +53,38 @@ describe('FindInFilesDialog', () => {
     expect(container.querySelector('input')).toBeNull()
   })
 
+  it('survives close + reopen (regression: crashed on reopen)', async () => {
+    searchDesktopFiles.mockResolvedValue(RESULT)
+    renderDialog()
+
+    act(() => openFindInFiles('find'))
+    expect(await screen.findByLabelText('Find in files')).toBeTruthy()
+
+    act(() => closeFindInFiles())
+    await waitFor(() => expect(screen.queryByLabelText('Find in files')).toBeNull())
+
+    act(() => openFindInFiles('find'))
+    expect(await screen.findByLabelText('Find in files')).toBeTruthy()
+  })
+
+  it('survives open → click result (auto-closes) → reopen', async () => {
+    searchDesktopFiles.mockResolvedValue(RESULT)
+    normalizeOrLocalPreviewTarget.mockResolvedValue({ kind: 'file', path: '/proj/src/a.ts', source: '/proj/src/a.ts', url: 'file:///proj/src/a.ts', label: 'a.ts' })
+    renderDialog()
+
+    act(() => openFindInFiles('find'))
+    fireEvent.change(await screen.findByLabelText('Find in files'), { target: { value: 'foo' } })
+    await waitFor(() => expect(screen.getByText('a.ts')).toBeTruthy())
+
+    fireEvent.click(screen.getAllByText('foo', { selector: 'mark' })[0].closest('button') as HTMLElement)
+    // Clicking a result opens the file and auto-closes the dialog.
+    await waitFor(() => expect(screen.queryByLabelText('Find in files')).toBeNull())
+
+    // Reopening must not crash and should show the dialog again.
+    act(() => openFindInFiles('find'))
+    expect(await screen.findByLabelText('Find in files')).toBeTruthy()
+  })
+
   it('searches as the user types and lists results grouped by file', async () => {
     searchDesktopFiles.mockResolvedValue(RESULT)
     act(() => openFindInFiles('find'))

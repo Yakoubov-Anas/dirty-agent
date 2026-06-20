@@ -13,6 +13,20 @@ export function openFindInFiles(mode: FindInFilesMode = 'find') {
   $findInFiles.set({ open: true, mode })
 }
 
+// Toggle for the keybind: open in the given mode, or close if already open in
+// that same mode. Pressing the shortcut again reliably reopens after any close.
+export function toggleFindInFiles(mode: FindInFilesMode = 'find') {
+  const current = $findInFiles.get()
+
+  if (current.open && current.mode === mode) {
+    $findInFiles.set({ ...current, open: false })
+
+    return
+  }
+
+  $findInFiles.set({ open: true, mode })
+}
+
 export function closeFindInFiles() {
   $findInFiles.set({ ...$findInFiles.get(), open: false })
 }

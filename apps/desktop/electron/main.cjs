@@ -3443,12 +3443,12 @@ function buildApplicationMenu() {
   template.push({
     label: 'View',
     submenu: [
-      // registerAccelerator:false frees plain Cmd/Ctrl+R for the web page (the
-      // code editor uses it to open find-and-replace) while still showing the
-      // shortcut in the menu. Force-reload (Cmd/Ctrl+Shift+R) keeps its
-      // accelerator, so reloading the app is still a keystroke away.
+      // Cmd/Ctrl+R (reload) and Cmd/Ctrl+Shift+R (force reload) both yield
+      // their accelerators to the web page: the editor uses Ctrl+R for
+      // find-and-replace and the app uses Ctrl+Shift+R for Replace in Files.
+      // The menu still shows the shortcuts and reload is a click away.
       { role: 'reload', registerAccelerator: false },
-      { role: 'forceReload' },
+      { role: 'forceReload', registerAccelerator: false },
       { role: 'toggleDevTools' },
       { type: 'separator' },
       {
