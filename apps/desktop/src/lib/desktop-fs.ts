@@ -94,6 +94,29 @@ export async function readDesktopFileDataUrl(path: string): Promise<string> {
   return typeof result === 'string' ? result : result.dataUrl || ''
 }
 
+// Reveal a path in the OS file manager (Finder/Explorer). Local-only — a remote
+// backend's paths don't exist on this machine, so there is nothing to show.
+// Returns false when unavailable (remote mode, no bridge, or the reveal failed).
+export async function revealDesktopPathInOS(path: string): Promise<boolean> {
+  if (!path || isDesktopFsRemoteMode()) {
+    return false
+  }
+
+  const reveal = window.hermesDesktop?.revealInOS
+
+  if (!reveal) {
+    return false
+  }
+
+  try {
+    const result = await reveal(path)
+
+    return Boolean(result?.ok)
+  } catch {
+    return false
+  }
+}
+
 export interface FileSearchOptions {
   query: string
   root?: string

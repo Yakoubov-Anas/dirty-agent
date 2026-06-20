@@ -1674,6 +1674,13 @@ export const en: Translations = {
     saved: 'Saved',
     saveFailed: message => `Save failed: ${message}`,
     modifiedBadge: 'Modified',
+    copyPath: 'Copy path',
+    copyRelativePath: 'Copy relative path',
+    revealInTree: 'Reveal in file tree',
+    revealInOS: 'Reveal in file explorer',
+    revealInOSFailed: 'Could not reveal file',
+    closeTabLabel: 'Close',
+    closeOthers: 'Close others',
     console: {
       deselect: 'Deselect entry',
       select: 'Select entry',

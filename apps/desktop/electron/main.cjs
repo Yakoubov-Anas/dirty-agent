@@ -5905,6 +5905,26 @@ ipcMain.handle('hermes:logs:reveal', async () => {
 
 ipcMain.handle('hermes:logs:recent', async () => ({ path: DESKTOP_LOG_PATH, lines: hermesLog.slice(-200) }))
 
+// Reveal an arbitrary file/folder in the OS file manager (Finder/Explorer).
+// Local-only: a remote backend's paths don't exist on this machine.
+ipcMain.handle('hermes:fs:reveal', async (_event, filePath) => {
+  if (typeof filePath !== 'string' || !filePath || !path.isAbsolute(filePath)) {
+    return { ok: false, path: String(filePath || ''), error: 'invalid-path' }
+  }
+
+  try {
+    if (!fileExists(filePath)) {
+      return { ok: false, path: filePath, error: 'not-found' }
+    }
+
+    shell.showItemInFolder(filePath)
+
+    return { ok: true, path: filePath }
+  } catch (error) {
+    return { ok: false, path: filePath, error: error.message }
+  }
+})
+
 function isExecutableFile(filePath) {
   if (!filePath || !path.isAbsolute(filePath)) {
     return false

@@ -483,6 +483,22 @@ export function closeRightRailTab(tabId: RightRailTabId) {
 
 export const closeActiveRightRailTab = () => closeRightRailTab($rightRailActiveTabId.get())
 
+/** Close every tab except `keepTabId`, then make it active. Used by the tab
+ *  context menu's "Close others". */
+export function closeOtherRightRailTabs(keepTabId: RightRailTabId) {
+  for (const tab of $filePreviewTabs.get()) {
+    if (tab.id !== keepTabId) {
+      closeFilePreviewTab(tab.id)
+    }
+  }
+
+  if (keepTabId !== RIGHT_RAIL_PREVIEW_TAB_ID && $previewTarget.get()) {
+    dismissPreviewTarget()
+  }
+
+  selectRightRailTab(keepTabId)
+}
+
 /** Dismisses the active preview + every file tab so the rail pane unmounts. */
 export function closeRightRail() {
   if ($previewTarget.get()) {

@@ -1316,6 +1316,14 @@ export interface Translations {
     saved?: string
     saveFailed?: (message: string) => string
     modifiedBadge?: string
+    // Tab context menu. Optional so non-default locales fall back to English.
+    copyPath?: string
+    copyRelativePath?: string
+    revealInTree?: string
+    revealInOS?: string
+    revealInOSFailed?: string
+    closeTabLabel?: string
+    closeOthers?: string
     console: {
       deselect: string
       select: string

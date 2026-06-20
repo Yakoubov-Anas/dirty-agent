@@ -277,6 +277,130 @@ export function resetProjectTreeState() {
   clearProjectDirCache()
 }
 
+/** Module-level lazy child load, keyed off the atom's current cwd so it can be
+ *  driven from outside the hook (e.g. revealing a tab's file in the tree). */
+async function loadChildrenById(id: string) {
+  const cwd = $projectTree.get().cwd
+
+  if (!cwd || inflight.has(id)) {
+    return
+  }
+
+  inflight.add(id)
+
+  setProjectTree(current => {
+    if (current.cwd !== cwd) {
+      return current
+    }
+
+    return {
+      ...current,
+      data: patchNode(current.data, id, n => ({ ...n, loading: true, children: [placeholderChild(n.id)] }))
+    }
+  })
+
+  const rootPath = $projectTree.get().resolvedCwd || cwd
+  const { entries, error } = await readProjectDir(id, rootPath)
+
+  inflight.delete(id)
+
+  setProjectTree(current => {
+    if (current.cwd !== cwd) {
+      return current
+    }
+
+    return {
+      ...current,
+      data: patchNode(current.data, id, n => ({
+        ...n,
+        loading: false,
+        error: error || undefined,
+        children: error ? [errorChild(n.id, error)] : entries.map(e => makeNode(e.path, e.name, e.isDirectory))
+      }))
+    }
+  })
+}
+
+/** Expand every ancestor folder of `path` and mark it for selection/scroll.
+ *  Module-level so the editor tab strip and other surfaces can reveal a file
+ *  in the tree, not just the sidebar header button. Resolves against the atom's
+ *  current cwd; a no-op when `path` is outside the displayed root. */
+export async function revealPathInTree(path: string) {
+  const cwd = $projectTree.get().cwd
+
+  if (!cwd || !path) {
+    return
+  }
+
+  const root = $projectTree.get().resolvedCwd || cwd
+  const segments = relativeSegments(root, path)
+
+  if (!segments || segments.length === 0) {
+    return
+  }
+
+  // Walk the segment chain from the root, loading each directory's children
+  // before descending so the lazy tree contains every ancestor by the time we
+  // remount. `id`s are matched by name (case-insensitive) to survive the
+  // backslash-vs-slash difference between filesystem ids and `file:` URLs.
+  let level: TreeNode[] = $projectTree.get().data
+  const ancestorIds: string[] = []
+  let selectionId: string | null = null
+
+  for (let i = 0; i < segments.length; i += 1) {
+    const isLast = i === segments.length - 1
+    const seg = segments[i].toLowerCase()
+    const node = level.find(n => !n.placeholder && n.name.toLowerCase() === seg)
+
+    if (!node) {
+      return
+    }
+
+    if (isLast) {
+      selectionId = node.id
+
+      break
+    }
+
+    ancestorIds.push(node.id)
+
+    if (node.children === undefined && !node.loading) {
+      await loadChildrenById(node.id)
+    }
+
+    if ($projectTree.get().cwd !== cwd) {
+      return
+    }
+
+    level = findNode($projectTree.get().data, node.id)?.children ?? []
+  }
+
+  if (!selectionId) {
+    return
+  }
+
+  const id = selectionId
+
+  setProjectTree(current => {
+    if (current.cwd !== cwd) {
+      return current
+    }
+
+    const openState = { ...current.openState }
+
+    for (const ancestorId of ancestorIds) {
+      openState[ancestorId] = true
+    }
+
+    return {
+      ...current,
+      openState,
+      revealNonce: current.revealNonce + 1,
+      revealSelection: id
+    }
+  })
+}
+
 /**
  * Lazy-loads a directory tree rooted at `cwd`. Children are fetched on first
  * expand and cached in this feature-owned atom so unrelated chat rerenders or
@@ -323,125 +447,9 @@ export function useProjectTree(cwd: string): UseProjectTreeResult {
     })
   }, [cwd])
 
-  const loadChildren = useCallback(
-    async (id: string) => {
-      if (!cwd || inflight.has(id)) {
-        return
-      }
+  const loadChildren = useCallback((id: string) => loadChildrenById(id), [])
 
-      inflight.add(id)
-
-      setProjectTree(current => {
-        if (current.cwd !== cwd) {
-          return current
-        }
-
-        return {
-          ...current,
-          data: patchNode(current.data, id, n => ({ ...n, loading: true, children: [placeholderChild(n.id)] }))
-        }
-      })
-
-      const rootPath = $projectTree.get().resolvedCwd || cwd
-      const { entries, error } = await readProjectDir(id, rootPath)
-
-      inflight.delete(id)
-
-      setProjectTree(current => {
-        if (current.cwd !== cwd) {
-          return current
-        }
-
-        return {
-          ...current,
-          data: patchNode(current.data, id, n => ({
-            ...n,
-            loading: false,
-            error: error || undefined,
-            children: error ? [errorChild(n.id, error)] : entries.map(e => makeNode(e.path, e.name, e.isDirectory))
-          }))
-        }
-      })
-    },
-    [cwd]
-  )
-
-  const revealPath = useCallback(
-    async (path: string) => {
-      if (!cwd || !path) {
-        return
-      }
-
-      const root = $projectTree.get().resolvedCwd || cwd
-      const segments = relativeSegments(root, path)
-
-      if (!segments || segments.length === 0) {
-        return
-      }
-
-      // Walk the segment chain from the root, loading each directory's children
-      // before descending so the lazy tree contains every ancestor by the time
-      // we remount. `id`s are matched by name (case-insensitive) to survive the
-      // backslash-vs-slash difference between filesystem ids and `file:` URLs.
-      let level: TreeNode[] = $projectTree.get().data
-      const ancestorIds: string[] = []
-      let selectionId: string | null = null
-
-      for (let i = 0; i < segments.length; i += 1) {
-        const isLast = i === segments.length - 1
-        const seg = segments[i].toLowerCase()
-        const node = level.find(n => !n.placeholder && n.name.toLowerCase() === seg)
-
-        if (!node) {
-          return
-        }
-
-        if (isLast) {
-          selectionId = node.id
-
-          break
-        }
-
-        ancestorIds.push(node.id)
-
-        if (node.children === undefined && !node.loading) {
-          await loadChildren(node.id)
-        }
-
-        if ($projectTree.get().cwd !== cwd) {
-          return
-        }
-
-        level = findNode($projectTree.get().data, node.id)?.children ?? []
-      }
-
-      if (!selectionId) {
-        return
-      }
-
-      const id = selectionId
-
-      setProjectTree(current => {
-        if (current.cwd !== cwd) {
-          return current
-        }
-
-        const openState = { ...current.openState }
-
-        for (const ancestorId of ancestorIds) {
-          openState[ancestorId] = true
-        }
-
-        return {
-          ...current,
-          openState,
-          revealNonce: current.revealNonce + 1,
-          revealSelection: id
-        }
-      })
-    },
-    [cwd, loadChildren]
-  )
+  const revealPath = useCallback((path: string) => revealPathInTree(path), [])
 
   useEffect(() => {
     const connectionChanged = lastConnectionKey !== '' && lastConnectionKey !== connectionKey

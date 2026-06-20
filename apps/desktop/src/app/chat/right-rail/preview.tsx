@@ -1,10 +1,20 @@
 import { useStore } from '@nanostores/react'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 
+import { revealPathInTree } from '@/app/right-sidebar/files/use-project-tree'
 import type { SetTitlebarToolGroup } from '@/app/shell/titlebar-controls'
 import { Codicon } from '@/components/ui/codicon'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
+import { CopyButton } from '@/components/ui/copy-button'
 import { Tip } from '@/components/ui/tooltip'
 import { translateNow, useI18n } from '@/i18n'
+import { isDesktopFsRemoteMode, revealDesktopPathInOS } from '@/lib/desktop-fs'
 import { cn } from '@/lib/utils'
 import {
   $rightRailActiveTabId,
@@ -12,15 +22,18 @@ import {
   type RightRailTabId,
   selectRightRailTab
 } from '@/store/layout'
+import { notifyError } from '@/store/notifications'
 import {
   $dirtyPreviewFiles,
   $filePreviewTabs,
   $previewReloadRequest,
   $previewTarget,
+  closeOtherRightRailTabs,
   closeRightRail,
   closeRightRailTab,
   type PreviewTarget
 } from '@/store/preview'
+import { $currentCwd } from '@/store/session'
 
 import { filePathForTarget } from './preview-file'
 import { PreviewPane } from './preview-pane'
@@ -54,6 +67,33 @@ function tabLabelFor(target: PreviewTarget): string {
   return tail || value || translateNow('preview.tab')
 }
 
+/** Path of the file a tab points at, or its url for non-file (live) previews. */
+function tabPathFor(target: PreviewTarget): string {
+  return target.kind === 'file' ? filePathForTarget(target) : target.url
+}
+
+/** `filePath` relative to `cwd`, or null when it is not inside the workspace.
+ *  Separator- and case-insensitive so it works on Windows and with `file:`
+ *  URLs; the returned slice preserves the original casing/separators. */
+function relativeToCwd(cwd: string, filePath: string): string | null {
+  if (!cwd || !filePath) {
+    return null
+  }
+
+  const root = cwd
+    .replace(/\\/g, '/')
+    .replace(/\/+$/, '')
+    .toLowerCase()
+
+  const full = filePath.replace(/\\/g, '/').toLowerCase()
+
+  if (full === root || !full.startsWith(`${root}/`)) {
+    return null
+  }
+
+  return filePath.slice(root.length).replace(/^[\\/]+/, '')
+}
+
 export function ChatPreviewRail({ onRestartServer, setTitlebarToolGroup }: ChatPreviewRailProps) {
   const { t } = useI18n()
   const previewReloadRequest = useStore($previewReloadRequest)
@@ -61,6 +101,7 @@ export function ChatPreviewRail({ onRestartServer, setTitlebarToolGroup }: ChatP
   const filePreviewTabs = useStore($filePreviewTabs)
   const previewTarget = useStore($previewTarget)
   const dirtyFiles = useStore($dirtyPreviewFiles)
+  const cwd = useStore($currentCwd).trim()
   const wheelCleanupRef = useRef<(() => void) | null>(null)
 
   // Vertical mouse-wheel scrolls the tab strip horizontally (the scrollbar is
@@ -129,67 +170,71 @@ export function ChatPreviewRail({ onRestartServer, setTitlebarToolGroup }: ChatP
             const isDirty = dirtyFiles.has(filePathForTarget(tab.target))
 
             return (
-              <div
-                className={cn(
-                  'group/tab relative flex h-full min-w-0 max-w-48 shrink-0 items-center text-[0.6875rem] font-medium [-webkit-app-region:no-drag] last:border-r last:border-(--ui-stroke-quaternary)',
-                  active
-                    ? 'bg-(--ui-editor-surface-background) text-foreground [--tab-bg:var(--ui-editor-surface-background)]'
-                    : 'border-r border-(--ui-stroke-quaternary) text-(--ui-text-tertiary) [--tab-bg:var(--ui-sidebar-surface-background)] hover:bg-(--chrome-action-hover) hover:text-foreground'
-                )}
-                key={tab.id}
-                // Middle-click closes the tab, matching browser/IDE muscle
-                // memory. `onMouseDown` swallows the middle-button press so
-                // Chromium doesn't switch into autoscroll mode.
-                onAuxClick={event => {
-                  if (event.button !== 1) {
-                    return
-                  }
-
-                  event.preventDefault()
-                  closeRightRailTab(tab.id)
-                }}
-                onMouseDown={event => {
-                  if (event.button === 1) {
-                    event.preventDefault()
-                  }
-                }}
-              >
-                {active && (
-                  <span aria-hidden="true" className="absolute inset-x-0 top-0 h-px bg-(--ui-stroke-primary)" />
-                )}
-                <Tip label={tab.label}>
-                  <button
-                    aria-selected={active}
-                    className="flex h-full min-w-0 max-w-full items-center gap-1.5 overflow-hidden pl-3 pr-2 text-left outline-none"
-                    onClick={() => selectRightRailTab(tab.id)}
-                    role="tab"
-                    type="button"
-                  >
-                    {/* JetBrains-style unsaved indicator: a small dot before the
-                        file name, in the tab's own text color. */}
-                    {isDirty && (
-                      <span
-                        aria-label={t.preview.modifiedBadge ?? 'Unsaved changes'}
-                        className="size-1.5 shrink-0 rounded-full bg-current"
-                        role="img"
-                      />
+              <ContextMenu key={tab.id}>
+                <ContextMenuTrigger asChild>
+                  <div
+                    className={cn(
+                      'group/tab relative flex h-full min-w-0 max-w-48 shrink-0 items-center text-[0.6875rem] font-medium [-webkit-app-region:no-drag] last:border-r last:border-(--ui-stroke-quaternary)',
+                      active
+                        ? 'bg-(--ui-editor-surface-background) text-foreground [--tab-bg:var(--ui-editor-surface-background)]'
+                        : 'border-r border-(--ui-stroke-quaternary) text-(--ui-text-tertiary) [--tab-bg:var(--ui-sidebar-surface-background)] hover:bg-(--chrome-action-hover) hover:text-foreground'
                     )}
-                    <span className="block min-w-0 truncate">{tab.label}</span>
-                  </button>
-                </Tip>
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-y-0 right-0 w-9 bg-[linear-gradient(to_right,transparent,var(--tab-bg)_55%)] opacity-0 transition-opacity group-hover/tab:opacity-100 group-focus-within/tab:opacity-100"
-                />
-                <button
-                  aria-label={t.preview.closeTab(tab.label)}
-                  className="pointer-events-none absolute right-1.5 top-1/2 grid size-4 -translate-y-1/2 place-items-center rounded-sm text-(--ui-text-tertiary) opacity-0 transition-[background-color,color,opacity] hover:bg-(--ui-bg-secondary) hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/tab:pointer-events-auto group-hover/tab:opacity-100 group-focus-within/tab:pointer-events-auto group-focus-within/tab:opacity-100"
-                  onClick={() => closeRightRailTab(tab.id)}
-                  type="button"
-                >
-                  <Codicon name="close" size="0.75rem" />
-                </button>
-              </div>
+                    // Middle-click closes the tab, matching browser/IDE muscle
+                    // memory. `onMouseDown` swallows the middle-button press so
+                    // Chromium doesn't switch into autoscroll mode.
+                    onAuxClick={event => {
+                      if (event.button !== 1) {
+                        return
+                      }
+
+                      event.preventDefault()
+                      closeRightRailTab(tab.id)
+                    }}
+                    onMouseDown={event => {
+                      if (event.button === 1) {
+                        event.preventDefault()
+                      }
+                    }}
+                  >
+                    {active && (
+                      <span aria-hidden="true" className="absolute inset-x-0 top-0 h-px bg-(--ui-stroke-primary)" />
+                    )}
+                    <Tip label={tab.label}>
+                      <button
+                        aria-selected={active}
+                        className="flex h-full min-w-0 max-w-full items-center gap-1.5 overflow-hidden pl-3 pr-2 text-left outline-none"
+                        onClick={() => selectRightRailTab(tab.id)}
+                        role="tab"
+                        type="button"
+                      >
+                        {/* JetBrains-style unsaved indicator: a small dot before the
+                            file name, in the tab's own text color. */}
+                        {isDirty && (
+                          <span
+                            aria-label={t.preview.modifiedBadge ?? 'Unsaved changes'}
+                            className="size-1.5 shrink-0 rounded-full bg-current"
+                            role="img"
+                          />
+                        )}
+                        <span className="block min-w-0 truncate">{tab.label}</span>
+                      </button>
+                    </Tip>
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-y-0 right-0 w-9 bg-[linear-gradient(to_right,transparent,var(--tab-bg)_55%)] opacity-0 transition-opacity group-hover/tab:opacity-100 group-focus-within/tab:opacity-100"
+                    />
+                    <button
+                      aria-label={t.preview.closeTab(tab.label)}
+                      className="pointer-events-none absolute right-1.5 top-1/2 grid size-4 -translate-y-1/2 place-items-center rounded-sm text-(--ui-text-tertiary) opacity-0 transition-[background-color,color,opacity] hover:bg-(--ui-bg-secondary) hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/tab:pointer-events-auto group-hover/tab:opacity-100 group-focus-within/tab:pointer-events-auto group-focus-within/tab:opacity-100"
+                      onClick={() => closeRightRailTab(tab.id)}
+                      type="button"
+                    >
+                      <Codicon name="close" size="0.75rem" />
+                    </button>
+                  </div>
+                </ContextMenuTrigger>
+                <PreviewTabMenu cwd={cwd} onlyTab={tabs.length === 1} tab={tab} />
+              </ContextMenu>
             )
           })}
         </div>
@@ -213,5 +258,65 @@ export function ChatPreviewRail({ onRestartServer, setTitlebarToolGroup }: ChatP
         />
       </div>
     </aside>
+  )
+}
+
+interface PreviewTabMenuProps {
+  cwd: string
+  onlyTab: boolean
+  tab: RailTab
+}
+
+function PreviewTabMenu({ cwd, onlyTab, tab }: PreviewTabMenuProps) {
+  const { t } = useI18n()
+  const p = t.preview
+  const isFile = tab.target.kind === 'file'
+  const fullPath = tabPathFor(tab.target)
+  const relPath = isFile ? relativeToCwd(cwd, fullPath) : null
+  const canRevealInOS = isFile && !isDesktopFsRemoteMode() && Boolean(window.hermesDesktop?.revealInOS)
+
+  const revealInOS = async () => {
+    const ok = await revealDesktopPathInOS(fullPath)
+
+    if (!ok) {
+      notifyError(new Error(fullPath), p.revealInOSFailed ?? p.unavailable)
+    }
+  }
+
+  return (
+    <ContextMenuContent className="w-52">
+      <CopyButton appearance="context-menu-item" label={p.copyPath ?? 'Copy path'} text={fullPath} />
+      {relPath && (
+        <CopyButton
+          appearance="context-menu-item"
+          label={p.copyRelativePath ?? 'Copy relative path'}
+          text={relPath}
+        />
+      )}
+      {isFile && (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={() => void revealPathInTree(fullPath)}>
+            <Codicon name="target" size="0.875rem" />
+            {p.revealInTree ?? 'Reveal in file tree'}
+          </ContextMenuItem>
+          {canRevealInOS && (
+            <ContextMenuItem onSelect={() => void revealInOS()}>
+              <Codicon name="folder-opened" size="0.875rem" />
+              {p.revealInOS ?? 'Reveal in file explorer'}
+            </ContextMenuItem>
+          )}
+        </>
+      )}
+      <ContextMenuSeparator />
+      <ContextMenuItem onSelect={() => closeRightRailTab(tab.id)}>
+        <Codicon name="close" size="0.875rem" />
+        {p.closeTabLabel ?? 'Close'}
+      </ContextMenuItem>
+      <ContextMenuItem disabled={onlyTab} onSelect={() => closeOtherRightRailTabs(tab.id)}>
+        <Codicon name="close-all" size="0.875rem" />
+        {p.closeOthers ?? 'Close others'}
+      </ContextMenuItem>
+    </ContextMenuContent>
   )
 }

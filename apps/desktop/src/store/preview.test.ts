@@ -11,7 +11,9 @@ import {
   beginPreviewServerRestart,
   clearSessionPreviewRegistry,
   closeActiveRightRailTab,
+  closeOtherRightRailTabs,
   dismissPreviewTarget,
+  filePreviewTabId,
   getSessionPreviewRecord,
   type PreviewTarget,
   progressPreviewServerRestart,
@@ -131,5 +133,38 @@ describe('preview store', () => {
     expect($filePreviewTarget.get()).toBeNull()
     expect($rightRailActiveTabId.get()).toBe(RIGHT_RAIL_PREVIEW_TAB_ID)
     expect($previewTarget.get()).toEqual(withRenderMode(live, 'preview'))
+  })
+
+  it('closeOtherRightRailTabs keeps only the chosen file tab', () => {
+    const a = previewTarget('/work/a.ts')
+    const b = previewTarget('/work/b.ts')
+    const c = previewTarget('/work/c.ts')
+
+    setCurrentSessionPreviewTarget(a, 'manual')
+    setCurrentSessionPreviewTarget(b, 'manual')
+    setCurrentSessionPreviewTarget(c, 'manual')
+
+    expect($filePreviewTabs.get()).toHaveLength(3)
+
+    closeOtherRightRailTabs(filePreviewTabId(b))
+
+    expect($filePreviewTabs.get().map(tab => tab.target.url)).toEqual(['file:///work/b.ts'])
+    expect($rightRailActiveTabId.get()).toBe(filePreviewTabId(b))
+  })
+
+  it('closeOtherRightRailTabs keeping the live preview dismisses file tabs', () => {
+    const file = previewTarget('/work/file.ts')
+    const live = previewTarget('/work/live.html')
+
+    setCurrentSessionPreviewTarget(file, 'manual')
+    setCurrentSessionPreviewTarget(live, 'tool-result')
+
+    expect($filePreviewTabs.get()).toHaveLength(1)
+
+    closeOtherRightRailTabs(RIGHT_RAIL_PREVIEW_TAB_ID)
+
+    expect($filePreviewTabs.get()).toHaveLength(0)
+    expect($previewTarget.get()).toEqual(withRenderMode(live, 'preview'))
+    expect($rightRailActiveTabId.get()).toBe(RIGHT_RAIL_PREVIEW_TAB_ID)
   })
 })
