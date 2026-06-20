@@ -26,6 +26,9 @@ import { requestEditorReveal, setCurrentSessionPreviewTarget } from '@/store/pre
 import { $currentCwd } from '@/store/session'
 
 const SEARCH_DEBOUNCE_MS = 250
+// Upper bound on match rows rendered at once — keeps a big result set from
+// stalling the dialog on open. Excess is summarized in a footer.
+const MAX_RENDERED_ROWS = 400
 
 // Stable signature of the inputs that affect a search result. Used to skip
 // refetching when reopening with unchanged params.
@@ -145,6 +148,34 @@ export function FindInFilesDialog() {
 
   const fileCount = result?.files.length ?? 0
   const matchCount = result?.total ?? 0
+
+  // Cap how many match rows we actually render. The result set can hold up to
+  // 2000 matches; building that many DOM nodes is what made the dialog slow to
+  // appear. Respect per-file collapse and stop once the row budget is spent.
+  const visibleFiles = useMemo(() => {
+    if (!result) {
+      return []
+    }
+
+    let budget = MAX_RENDERED_ROWS
+    const out: Array<{ file: FileSearchFile; shown: FileSearchFile['matches'] }> = []
+
+    for (const file of result.files) {
+      if (budget <= 0) {
+        break
+      }
+
+      const isCollapsed = collapsed.has(file.path)
+      const shown = isCollapsed ? [] : file.matches.slice(0, budget)
+      budget -= shown.length
+      out.push({ file, shown })
+    }
+
+    return out
+  }, [result, collapsed])
+
+  const renderedRows = visibleFiles.reduce((sum, f) => sum + f.shown.length, 0)
+  const hiddenRows = matchCount - renderedRows
 
   const openResult = async (file: FileSearchFile, line: number, column: number) => {
     try {
@@ -325,7 +356,7 @@ export function FindInFilesDialog() {
           {!error && query && !loading && matchCount === 0 && (
             <div className="px-3 py-6 text-center text-muted-foreground">No matches.</div>
           )}
-          {result?.files.map(file => {
+          {visibleFiles.map(({ file, shown }) => {
             const isCollapsed = collapsed.has(file.path)
 
             return (
@@ -343,7 +374,7 @@ export function FindInFilesDialog() {
                   </span>
                 </button>
                 {!isCollapsed &&
-                  file.matches.map((match, index) => (
+                  shown.map((match, index) => (
                     <button
                       className="flex w-full items-baseline gap-2 rounded px-2 py-0.5 pl-7 text-left font-mono hover:bg-(--chrome-action-hover)"
                       key={`${match.line}:${match.column}:${index}`}
@@ -359,6 +390,11 @@ export function FindInFilesDialog() {
               </div>
             )
           })}
+          {hiddenRows > 0 && (
+            <div className="px-3 py-2 text-center text-[0.6875rem] text-muted-foreground">
+              {hiddenRows} more match{hiddenRows === 1 ? '' : 'es'} hidden — refine your search to narrow results.
+            </div>
+          )}
         </div>
       </div>
     </div>
