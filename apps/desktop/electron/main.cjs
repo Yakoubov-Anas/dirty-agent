@@ -5743,6 +5743,92 @@ ipcMain.handle('hermes:writeFileText', async (_event, filePath, content) => {
   return { byteSize, path: resolvedPath }
 })
 
+// A single path segment safe to create/rename to — no separators or traversal.
+function validateFsName(name) {
+  const clean = String(name || '').trim()
+  if (!clean || clean === '.' || clean === '..') {
+    throw new Error('Invalid name')
+  }
+  if (clean.includes('/') || clean.includes('\\') || clean.includes('\0')) {
+    throw new Error('Name cannot contain path separators')
+  }
+  return clean
+}
+
+ipcMain.handle('hermes:fs:create', async (_event, parentPath, name, kind) => {
+  const purpose = 'Create'
+  const parent = resolveRequestedPathForIpc(parentPath, { purpose })
+  const cleanName = validateFsName(name)
+  const target = path.join(parent, cleanName)
+
+  const parentStat = await fs.promises.stat(parent).catch(() => null)
+  if (!parentStat || !parentStat.isDirectory()) {
+    throw new Error('Create failed: parent is not a directory.')
+  }
+  if (fileExists(target)) {
+    throw new Error('A file or folder with that name already exists.')
+  }
+
+  if (kind === 'folder') {
+    await fs.promises.mkdir(target)
+  } else if (kind === 'file') {
+    const blockReason = sensitiveFileBlockReason(target)
+    if (blockReason) {
+      throw new Error(`Create blocked for sensitive file: ${blockReason}`)
+    }
+    await fs.promises.writeFile(target, '', 'utf8')
+  } else {
+    throw new Error('Unknown entry kind')
+  }
+
+  return { path: target }
+})
+
+ipcMain.handle('hermes:fs:rename', async (_event, sourcePath, newName) => {
+  const purpose = 'Rename'
+  const source = resolveRequestedPathForIpc(sourcePath, { purpose })
+  const cleanName = validateFsName(newName)
+  const target = path.join(path.dirname(source), cleanName)
+
+  if (!fileExists(source)) {
+    throw new Error('Rename failed: file or folder not found.')
+  }
+  if (target === source) {
+    return { path: target }
+  }
+  if (fileExists(target)) {
+    throw new Error('A file or folder with that name already exists.')
+  }
+
+  const blockReason = sensitiveFileBlockReason(source) || sensitiveFileBlockReason(target)
+  if (blockReason) {
+    throw new Error(`Rename blocked for sensitive file: ${blockReason}`)
+  }
+
+  await fs.promises.rename(source, target)
+
+  return { path: target }
+})
+
+ipcMain.handle('hermes:fs:delete', async (_event, targetPath) => {
+  const purpose = 'Delete'
+  const target = resolveRequestedPathForIpc(targetPath, { purpose })
+
+  if (!fileExists(target)) {
+    throw new Error('Delete failed: file or folder not found.')
+  }
+
+  const blockReason = sensitiveFileBlockReason(target)
+  if (blockReason) {
+    throw new Error(`Delete blocked for sensitive file: ${blockReason}`)
+  }
+
+  // Move to the OS trash so a misclick is recoverable, not a hard delete.
+  await shell.trashItem(target)
+
+  return { path: target, trashed: true }
+})
+
 ipcMain.handle('hermes:selectPaths', async (_event, options = {}) => {
   const properties = options?.directories ? ['openDirectory'] : ['openFile']
   if (options?.multiple !== false) properties.push('multiSelections')

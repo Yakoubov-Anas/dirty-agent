@@ -117,6 +117,71 @@ export async function revealDesktopPathInOS(path: string): Promise<boolean> {
   }
 }
 
+export type DesktopEntryKind = 'file' | 'folder'
+
+// Create an empty file or a folder named `name` inside `parentPath`. Local mode
+// goes through Electron IPC; remote mode posts to the backend. Returns the new
+// entry's absolute path. Throws on conflict / permission / sensitive-file block.
+export async function createDesktopEntry(
+  parentPath: string,
+  name: string,
+  kind: DesktopEntryKind
+): Promise<string> {
+  const desktop = bridge()
+
+  if (!isDesktopFsRemoteMode()) {
+    const result = await desktop.createEntry(parentPath, name, kind)
+
+    return result.path
+  }
+
+  const result = await desktop.api<{ path: string }>({
+    path: '/api/fs/create',
+    method: 'POST',
+    body: { path: parentPath, name, kind }
+  })
+
+  return result.path
+}
+
+// Rename `sourcePath` to `newName` within its own directory. Returns the new
+// absolute path.
+export async function renameDesktopEntry(sourcePath: string, newName: string): Promise<string> {
+  const desktop = bridge()
+
+  if (!isDesktopFsRemoteMode()) {
+    const result = await desktop.renameEntry(sourcePath, newName)
+
+    return result.path
+  }
+
+  const result = await desktop.api<{ path: string }>({
+    path: '/api/fs/rename',
+    method: 'POST',
+    body: { path: sourcePath, newName }
+  })
+
+  return result.path
+}
+
+// Delete `targetPath`. Local mode moves it to the OS trash (recoverable); remote
+// mode removes it on the backend host.
+export async function deleteDesktopEntry(targetPath: string): Promise<void> {
+  const desktop = bridge()
+
+  if (!isDesktopFsRemoteMode()) {
+    await desktop.deleteEntry(targetPath)
+
+    return
+  }
+
+  await desktop.api<{ path: string }>({
+    path: '/api/fs/delete',
+    method: 'POST',
+    body: { path: targetPath }
+  })
+}
+
 export interface FileSearchOptions {
   query: string
   root?: string

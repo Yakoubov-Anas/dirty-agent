@@ -401,6 +401,30 @@ export async function revealPathInTree(path: string) {
   })
 }
 
+/** Re-read `dirPath`'s entries after a filesystem change (create/rename/delete).
+ *  Reloads the whole root when `dirPath` is the displayed root, otherwise just
+ *  that folder's children. Module-level so file-ops can refresh the tree. */
+export async function refreshTreeDir(dirPath: string) {
+  const state = $projectTree.get()
+  const cwd = state.cwd
+
+  if (!cwd || !dirPath) {
+    return
+  }
+
+  const root = state.resolvedCwd || cwd
+
+  if (normalizePath(dirPath) === normalizePath(root)) {
+    await loadRoot(cwd, { force: true })
+
+    return
+  }
+
+  // Drop any stale in-flight guard so the reload actually re-fetches.
+  inflight.delete(dirPath)
+  await loadChildrenById(dirPath)
+}
+
 /**
  * Lazy-loads a directory tree rooted at `cwd`. Children are fetched on first
  * expand and cached in this feature-owned atom so unrelated chat rerenders or

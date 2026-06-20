@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 import { relativePathFromCwd } from '@/lib/workspace-path'
 
 import { getFileTreeDndManager } from './dnd-manager'
+import { openDeletePrompt, openNewFilePrompt, openNewFolderPrompt, openRenamePrompt, parentDir } from './file-ops'
 import type { TreeNode } from './use-project-tree'
 
 const ROW_HEIGHT = 22
@@ -287,9 +288,29 @@ function ProjectTreeRowMenu({ cwd, isFolder, path }: ProjectTreeRowMenuProps) {
   const r = t.rightSidebar
   const relPath = relativePathFromCwd(cwd, path)
   const canRevealInOS = !isDesktopFsRemoteMode() && Boolean(window.hermesDesktop?.revealInOS)
+  // New entries land inside a folder, or alongside a file (its parent dir).
+  const newEntryDir = isFolder ? path : parentDir(path)
 
   return (
-    <ContextMenuContent className="w-48">
+    <ContextMenuContent className="w-52">
+      <ContextMenuItem onSelect={() => openNewFilePrompt(newEntryDir)}>
+        <Codicon name="new-file" size="0.875rem" />
+        {r.newFile ?? 'New file'}
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={() => openNewFolderPrompt(newEntryDir)}>
+        <Codicon name="new-folder" size="0.875rem" />
+        {r.newFolder ?? 'New folder'}
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem onSelect={() => openRenamePrompt(path, isFolder)}>
+        <Codicon name="edit" size="0.875rem" />
+        {r.renameAction ?? 'Rename'}
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={() => openDeletePrompt(path, isFolder)} variant="destructive">
+        <Codicon name="trash" size="0.875rem" />
+        {r.deleteAction ?? 'Delete'}
+      </ContextMenuItem>
+      <ContextMenuSeparator />
       <CopyButton appearance="context-menu-item" label={r.copyPath ?? 'Copy path'} text={path} />
       {relPath && (
         <CopyButton

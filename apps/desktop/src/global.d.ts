@@ -48,6 +48,9 @@ declare global {
       readFileText: (filePath: string) => Promise<HermesReadFileTextResult>
       writeFileText: (filePath: string, content: string) => Promise<HermesWriteFileTextResult>
       revealInOS: (filePath: string) => Promise<{ ok: boolean; path: string; error?: string }>
+      createEntry: (parentPath: string, name: string, kind: 'file' | 'folder') => Promise<{ path: string }>
+      renameEntry: (sourcePath: string, newName: string) => Promise<{ path: string }>
+      deleteEntry: (targetPath: string) => Promise<{ path: string; trashed?: boolean }>
       selectPaths: (options?: HermesSelectPathsOptions) => Promise<string[]>
       writeClipboard: (text: string) => Promise<boolean>
       saveImageFromUrl: (url: string) => Promise<boolean>

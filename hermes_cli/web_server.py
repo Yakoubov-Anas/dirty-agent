@@ -1753,6 +1753,114 @@ async def fs_write_text(payload: FsWriteText):
     return {"byteSize": len(encoded), "path": str(target)}
 
 
+def _fs_validate_name(name: str) -> str:
+    """A single path segment safe to create/rename to (no separators / traversal)."""
+    clean = str(name or "").strip()
+    if not clean or clean in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Invalid name")
+    if "/" in clean or "\\" in clean or "\0" in clean:
+        raise HTTPException(status_code=400, detail="Name cannot contain path separators")
+    return clean
+
+
+class FsCreate(BaseModel):
+    # Parent directory the new entry is created inside.
+    path: str
+    name: str
+    kind: str  # "file" | "folder"
+
+
+@app.post("/api/fs/create")
+async def fs_create(payload: FsCreate):
+    parent = _fs_path(payload.path)
+    if not parent.is_dir():
+        raise HTTPException(status_code=400, detail="Parent is not a directory")
+
+    name = _fs_validate_name(payload.name)
+    target = (parent / name).resolve(strict=False)
+    if target.parent != parent.resolve(strict=False):
+        raise HTTPException(status_code=400, detail="Invalid name")
+    if target.exists():
+        raise HTTPException(status_code=409, detail="A file or folder with that name already exists")
+
+    if payload.kind == "folder":
+        try:
+            target.mkdir(parents=False)
+        except OSError as exc:
+            raise HTTPException(status_code=400, detail=str(exc) or "Could not create folder")
+    elif payload.kind == "file":
+        reason = _fs_write_block_reason(target)
+        if reason is not None:
+            raise HTTPException(status_code=403, detail=f"Blocked for sensitive file: {reason}")
+        try:
+            target.write_bytes(b"")
+        except OSError as exc:
+            raise HTTPException(status_code=400, detail=str(exc) or "Could not create file")
+    else:
+        raise HTTPException(status_code=400, detail="Unknown entry kind")
+
+    return {"path": str(target)}
+
+
+class FsRename(BaseModel):
+    path: str
+    newName: str
+
+
+@app.post("/api/fs/rename")
+async def fs_rename(payload: FsRename):
+    source = _fs_path(payload.path)
+    if not source.exists():
+        raise HTTPException(status_code=404, detail="File or folder not found")
+
+    name = _fs_validate_name(payload.newName)
+    target = (source.parent / name).resolve(strict=False)
+    if target.parent != source.parent.resolve(strict=False):
+        raise HTTPException(status_code=400, detail="Invalid name")
+    if target == source:
+        return {"path": str(target)}
+    if target.exists():
+        raise HTTPException(status_code=409, detail="A file or folder with that name already exists")
+
+    reason = _fs_write_block_reason(source) or _fs_write_block_reason(target)
+    if reason is not None:
+        raise HTTPException(status_code=403, detail=f"Blocked for sensitive file: {reason}")
+
+    try:
+        os.rename(source, target)
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "Rename failed")
+
+    return {"path": str(target)}
+
+
+class FsDelete(BaseModel):
+    path: str
+
+
+@app.post("/api/fs/delete")
+async def fs_delete(payload: FsDelete):
+    target = _fs_path(payload.path)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File or folder not found")
+    if target == target.parent:
+        raise HTTPException(status_code=400, detail="Refusing to delete the filesystem root")
+
+    reason = _fs_write_block_reason(target)
+    if reason is not None:
+        raise HTTPException(status_code=403, detail=f"Blocked for sensitive file: {reason}")
+
+    try:
+        if target.is_dir() and not target.is_symlink():
+            shutil.rmtree(target)
+        else:
+            target.unlink()
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "Delete failed")
+
+    return {"path": str(target)}
+
+
 # ---------------------------------------------------------------------------
 # Project-wide find / replace (Find in Files)
 # ---------------------------------------------------------------------------

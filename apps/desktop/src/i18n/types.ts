@@ -1272,6 +1272,22 @@ export interface Translations {
     copyPath: string
     copyRelativePath: string
     revealInOS: string
+    // File-operation menu + dialogs. Optional so non-default locales fall back
+    // to English at runtime.
+    newFile?: string
+    newFolder?: string
+    renameAction?: string
+    deleteAction?: string
+    newFileTitle?: string
+    newFolderTitle?: string
+    renameTitle?: string
+    deleteFileTitle?: string
+    deleteFolderTitle?: string
+    deleteConfirm?: (name: string) => string
+    namePlaceholder?: string
+    nameRequired?: string
+    createAction?: string
+    fileOpFailed?: string
     previewUnavailable: string
     couldNotPreview: (path: string) => string
     noProjectTitle: string

@@ -319,3 +319,89 @@ def test_fs_find_files_no_match(client, tmp_path):
 
     assert response.status_code == 200
     assert response.json()["files"] == []
+
+
+# ---------------------------------------------------------------------------
+# create / rename / delete
+# ---------------------------------------------------------------------------
+
+
+def test_fs_create_file_and_folder(client, tmp_path):
+    file_resp = client.post("/api/fs/create", json={"path": str(tmp_path), "name": "new.txt", "kind": "file"})
+    assert file_resp.status_code == 200
+    assert file_resp.json() == {"path": str(tmp_path / "new.txt")}
+    assert (tmp_path / "new.txt").is_file()
+    assert (tmp_path / "new.txt").read_text() == ""
+
+    dir_resp = client.post("/api/fs/create", json={"path": str(tmp_path), "name": "sub", "kind": "folder"})
+    assert dir_resp.status_code == 200
+    assert (tmp_path / "sub").is_dir()
+
+
+def test_fs_create_rejects_existing_and_separators(client, tmp_path):
+    (tmp_path / "dup.txt").write_text("x")
+
+    exists = client.post("/api/fs/create", json={"path": str(tmp_path), "name": "dup.txt", "kind": "file"})
+    assert exists.status_code == 409
+
+    traversal = client.post("/api/fs/create", json={"path": str(tmp_path), "name": "a/b.txt", "kind": "file"})
+    assert traversal.status_code == 400
+
+    dotdot = client.post("/api/fs/create", json={"path": str(tmp_path), "name": "..", "kind": "folder"})
+    assert dotdot.status_code == 400
+
+
+def test_fs_create_blocks_sensitive_file(client, tmp_path):
+    resp = client.post("/api/fs/create", json={"path": str(tmp_path), "name": ".env", "kind": "file"})
+    assert resp.status_code == 403
+    assert not (tmp_path / ".env").exists()
+
+
+def test_fs_rename_moves_within_directory(client, tmp_path):
+    src = tmp_path / "old.txt"
+    src.write_text("data")
+
+    resp = client.post("/api/fs/rename", json={"path": str(src), "newName": "new.txt"})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"path": str(tmp_path / "new.txt")}
+    assert not src.exists()
+    assert (tmp_path / "new.txt").read_text() == "data"
+
+
+def test_fs_rename_rejects_conflict_and_missing(client, tmp_path):
+    (tmp_path / "a.txt").write_text("a")
+    (tmp_path / "b.txt").write_text("b")
+
+    conflict = client.post("/api/fs/rename", json={"path": str(tmp_path / "a.txt"), "newName": "b.txt"})
+    assert conflict.status_code == 409
+
+    missing = client.post("/api/fs/rename", json={"path": str(tmp_path / "ghost.txt"), "newName": "x.txt"})
+    assert missing.status_code == 404
+
+
+def test_fs_delete_file_and_folder(client, tmp_path):
+    target = tmp_path / "gone.txt"
+    target.write_text("x")
+
+    resp = client.post("/api/fs/delete", json={"path": str(target)})
+    assert resp.status_code == 200
+    assert not target.exists()
+
+    folder = tmp_path / "tree"
+    (folder / "nested").mkdir(parents=True)
+    (folder / "nested" / "f.txt").write_text("y")
+
+    dir_resp = client.post("/api/fs/delete", json={"path": str(folder)})
+    assert dir_resp.status_code == 200
+    assert not folder.exists()
+
+
+def test_fs_delete_missing_and_sensitive(client, tmp_path):
+    missing = client.post("/api/fs/delete", json={"path": str(tmp_path / "nope")})
+    assert missing.status_code == 404
+
+    (tmp_path / ".env").write_text("SECRET=1")
+    blocked = client.post("/api/fs/delete", json={"path": str(tmp_path / ".env")})
+    assert blocked.status_code == 403
+    assert (tmp_path / ".env").exists()

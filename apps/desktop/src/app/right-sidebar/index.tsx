@@ -17,6 +17,8 @@ import { $currentCwd } from '@/store/session'
 import { filePathForTarget } from '../chat/right-rail/preview-file'
 import { SidebarPanelLabel } from '../shell/sidebar-label'
 
+import { openNewFilePrompt, openNewFolderPrompt } from './files/file-ops'
+import { FileOpDialogs } from './files/file-ops-dialogs'
 import { RemoteFolderPicker } from './files/remote-picker'
 import { ProjectTree } from './files/tree'
 import { useProjectTree } from './files/use-project-tree'
@@ -207,6 +209,26 @@ function FilesystemTab({
           <Codicon name="folder-opened" size="0.8125rem" />
         </Button>
         <Button
+          aria-label={r.newFile ?? 'New file'}
+          className={HEADER_ACTION_LABEL_REVEAL}
+          disabled={!hasCwd}
+          onClick={() => openNewFilePrompt(cwd)}
+          size="icon-xs"
+          variant="ghost"
+        >
+          <Codicon name="new-file" size="0.8125rem" />
+        </Button>
+        <Button
+          aria-label={r.newFolder ?? 'New folder'}
+          className={HEADER_ACTION_LABEL_REVEAL}
+          disabled={!hasCwd}
+          onClick={() => openNewFolderPrompt(cwd)}
+          size="icon-xs"
+          variant="ghost"
+        >
+          <Codicon name="new-folder" size="0.8125rem" />
+        </Button>
+        <Button
           aria-label={r.revealFile}
           className={cn(HEADER_ACTION_CLASS, !canRevealFile && 'pointer-events-none opacity-0')}
           disabled={!canRevealFile}
@@ -243,6 +265,7 @@ function FilesystemTab({
         revealNonce={revealNonce}
         revealSelection={revealSelection}
       />
+      <FileOpDialogs />
     </div>
   )
 }
