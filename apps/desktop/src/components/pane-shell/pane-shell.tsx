@@ -240,6 +240,7 @@ export function Pane({
   defaultOpen = true,
   divider = false,
   disabled = false,
+  forceCollapsed = false,
   hoverReveal = false,
   id,
   maxWidth,
@@ -258,9 +259,11 @@ export function Pane({
   const slot = ctx?.paneById.get(id)
   const open = Boolean(slot?.open && !disabled)
   const side = slot?.side ?? 'left'
-  // Collapsed + hoverReveal: float the pane contents over the main column on
-  // hover/focus instead of hiding them. Honors any persisted resize width.
-  const overlayActive = !open && hoverReveal && !disabled
+  // Hover-reveal floats the pane over the main column instead of hiding it —
+  // but ONLY when the viewport forced the collapse (narrow window). When the
+  // user deliberately closes the pane from its tool-window stripe, it stays
+  // closed (JetBrains behavior); hovering the edge must not reveal it.
+  const overlayActive = !open && hoverReveal && !disabled && forceCollapsed
   const override = resizable ? paneStates[id]?.widthOverride : undefined
   const overlayWidth = override !== undefined ? `${override}px` : widthToCss(width, DEFAULT_WIDTH)
 
