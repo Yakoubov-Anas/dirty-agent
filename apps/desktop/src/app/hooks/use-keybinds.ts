@@ -7,7 +7,7 @@ import { matchesQuery } from '@/hooks/use-media-query'
 import { PROFILE_SLOT_COUNT, SESSION_SLOT_COUNT } from '@/lib/keybinds/actions'
 import { comboAllowedInInput, comboFromEvent, isEditableTarget } from '@/lib/keybinds/combo'
 import { toggleCommandPalette } from '@/store/command-palette'
-import { toggleFindInFiles } from '@/store/find-in-files'
+import { openFindInFiles } from '@/store/find-in-files'
 import { $capture, $comboIndex, endCapture, setBinding, toggleKeybindPanel } from '@/store/keybinds'
 import {
   CHAT_SIDEBAR_PANE_ID,
@@ -126,8 +126,8 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
     'nav.cron': () => navigate(CRON_ROUTE),
     'nav.agents': () => navigate(AGENTS_ROUTE),
 
-    'find.inFiles': () => toggleFindInFiles('find'),
-    'find.replaceInFiles': () => toggleFindInFiles('replace'),
+    'find.inFiles': () => openFindInFiles('find'),
+    'find.replaceInFiles': () => openFindInFiles('replace'),
 
     'session.new': () => {
       // Match the sidebar New Session button. A plain keyboard new chat should

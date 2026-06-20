@@ -10,20 +10,9 @@ export interface FindInFilesState {
 export const $findInFiles = atom<FindInFilesState>({ open: false, mode: 'find' })
 
 export function openFindInFiles(mode: FindInFilesMode = 'find') {
-  $findInFiles.set({ open: true, mode })
-}
-
-// Toggle for the keybind: open in the given mode, or close if already open in
-// that same mode. Pressing the shortcut again reliably reopens after any close.
-export function toggleFindInFiles(mode: FindInFilesMode = 'find') {
-  const current = $findInFiles.get()
-
-  if (current.open && current.mode === mode) {
-    $findInFiles.set({ ...current, open: false })
-
-    return
-  }
-
+  // Always open (never toggle-close): the shortcut should reliably surface the
+  // dialog regardless of current state, matching JetBrains. If it's already
+  // open we just switch to the requested mode and keep it open.
   $findInFiles.set({ open: true, mode })
 }
 
