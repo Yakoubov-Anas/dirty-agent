@@ -2,7 +2,6 @@ import { useStore } from '@nanostores/react'
 import { useCallback, useMemo } from 'react'
 
 import type { CommandCenterSection } from '@/app/command-center'
-import { $terminalTakeover, setTerminalTakeover } from '@/app/right-sidebar/store'
 import { GatewayMenuPanel } from '@/app/shell/gateway-menu-panel'
 import { useI18n } from '@/i18n'
 import {
@@ -13,7 +12,6 @@ import {
   Hash,
   Loader2,
   Sparkles,
-  Terminal,
   Zap,
   ZapFilled
 } from '@/lib/icons'
@@ -84,7 +82,6 @@ export function useStatusbarItems({
   const { t } = useI18n()
   const copy = t.shell.statusbar
   const activeSessionId = useStore($activeSessionId)
-  const terminalTakeover = useStore($terminalTakeover)
   const yoloActive = useStore($yoloActive)
   const busy = useStore($busy)
   const currentUsage = useStore($currentUsage)
@@ -402,27 +399,16 @@ export function useStatusbarItems({
         title: yoloActive ? copy.yoloOn : copy.yoloOff,
         variant: 'action'
       },
-      {
-        className: `w-7 justify-center px-0${terminalTakeover ? ' bg-accent/55 text-foreground' : ''}`,
-        hidden: !chatOpen,
-        icon: <Terminal className="size-3.5" />,
-        id: 'terminal',
-        onSelect: () => setTerminalTakeover(!$terminalTakeover.get()),
-        title: terminalTakeover ? copy.hideTerminal : copy.showTerminal,
-        variant: 'action'
-      },
       clientVersionItem,
       ...(backendVersionItem ? [backendVersionItem] : [])
     ],
     [
       busy,
-      chatOpen,
       contextBar,
       contextUsage,
       copy,
       sessionStartedAt,
       showYoloToggle,
-      terminalTakeover,
       toggleYolo,
       turnStartedAt,
       clientVersionItem,

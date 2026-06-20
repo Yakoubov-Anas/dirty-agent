@@ -1,14 +1,14 @@
 import { atom } from 'nanostores'
 
-import { persistBoolean, storedBoolean } from '@/lib/storage'
+import { TERMINAL_PANE_ID } from '@/store/layout'
+import { $paneOpen, setPaneOpen } from '@/store/panes'
 
-const TAKEOVER_KEY = 'hermes.desktop.terminalTakeover'
+// The console is a JetBrains-style tool window: its open state lives in the
+// shared pane store (so the edge stripe toggle + relocation work like every
+// other panel). These keep the historic terminal-takeover API as a thin alias.
+export const $terminalTakeover = $paneOpen(TERMINAL_PANE_ID)
 
-export const $terminalTakeover = atom(storedBoolean(TAKEOVER_KEY, false))
-
-$terminalTakeover.subscribe(active => persistBoolean(TAKEOVER_KEY, active))
-
-export const setTerminalTakeover = (active: boolean) => $terminalTakeover.set(active)
+export const setTerminalTakeover = (active: boolean) => setPaneOpen(TERMINAL_PANE_ID, active)
 
 /** A command queued to run in the embedded terminal. The terminal pane flushes
  *  (and clears) it once its session is live, so a value set before the pane

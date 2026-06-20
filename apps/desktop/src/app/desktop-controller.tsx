@@ -1,6 +1,6 @@
 import { useStore } from '@nanostores/react'
 import { useQueryClient } from '@tanstack/react-query'
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
+import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { BootFailureOverlay } from '@/components/boot-failure-overlay'
@@ -23,18 +23,20 @@ import {
 import { latestSessionTodos } from '../lib/todos'
 import { setCronFocusJobId, setCronJobs } from '../store/cron'
 import {
-  $panesFlipped,
   $pinnedSessionIds,
   $sessionsLimit,
   bumpSessionsLimit,
+  CHAT_SIDEBAR_PANE_ID,
   FILE_BROWSER_DEFAULT_WIDTH,
   FILE_BROWSER_MAX_WIDTH,
   FILE_BROWSER_MIN_WIDTH,
+  FILE_BROWSER_PANE_ID,
   pinSession,
   setSidebarOverlayMounted,
   SIDEBAR_DEFAULT_WIDTH,
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_SESSIONS_PAGE_SIZE,
+  TERMINAL_PANE_ID,
   unpinSession
 } from '../store/layout'
 import { respondToApprovalAction } from '../store/native-notifications'
@@ -82,6 +84,7 @@ import {
 } from '../store/session'
 import { onSessionsChanged } from '../store/session-sync'
 import { clearSessionTodos, setSessionTodos, todoListActive } from '../store/todos'
+import { $toolWindowSide } from '../store/tool-windows'
 import { openUpdatesWindow, startUpdatePoller, stopUpdatePoller } from '../store/updates'
 import { isSecondaryWindow } from '../store/windows'
 
@@ -210,7 +213,9 @@ export function DesktopController() {
   const previewTarget = useStore($previewTarget)
   const selectedStoredSessionId = useStore($selectedStoredSessionId)
   const terminalTakeover = useStore($terminalTakeover)
-  const panesFlipped = useStore($panesFlipped)
+  const sidebarSide = useStore($toolWindowSide(CHAT_SIDEBAR_PANE_ID))
+  const railSide = useStore($toolWindowSide(FILE_BROWSER_PANE_ID))
+  const terminalSide = useStore($toolWindowSide(TERMINAL_PANE_ID))
   const profileScope = useStore($profileScope)
   // Below SIDEBAR_COLLAPSE_BREAKPOINT_PX there's no room for a docked rail —
   // collapse both sidebars (without touching their stored open state) so the
@@ -1066,11 +1071,9 @@ export function DesktopController() {
     />
   )
 
-  // Flipped layout mirrors the default: sessions sidebar → right, file
-  // browser + preview rail → left. Same panes, swapped sides.
-  const sidebarSide = panesFlipped ? 'right' : 'left'
-  const railSide = panesFlipped ? 'left' : 'right'
-
+  // Each tool window docks on its own side (relocatable via the edge stripe's
+  // context menu). The file browser, preview, and terminal rails share the same
+  // "rail" side; the sessions/agent sidebar (sidebarSide) has its own.
   const previewPane = (
     <Pane
       disabled={!chatOpen || (!previewTarget && !filePreviewTarget)}
@@ -1112,15 +1115,15 @@ export function DesktopController() {
 
   const terminalPane = (
     <Pane
-      defaultOpen
-      disabled={!terminalSidebarOpen}
+      defaultOpen={false}
+      disabled={!chatOpen}
       divider
-      id="terminal-sidebar"
-      key="terminal-sidebar"
+      id={TERMINAL_PANE_ID}
+      key={TERMINAL_PANE_ID}
       maxWidth="80vw"
       minWidth="22vw"
       resizable
-      side={railSide}
+      side={terminalSide}
       width="42vw"
     >
       <div className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-(--ui-editor-surface-background) pt-(--pane-header-reserve)">
@@ -1128,6 +1131,38 @@ export function DesktopController() {
       </div>
     </Pane>
   )
+
+  const chatSidebarPane = !isSecondaryWindow() ? (
+    <Pane
+      forceCollapsed={narrowViewport}
+      hoverReveal
+      id="chat-sidebar"
+      key="chat-sidebar"
+      maxWidth={SIDEBAR_MAX_WIDTH}
+      minWidth={SIDEBAR_DEFAULT_WIDTH}
+      onOverlayActiveChange={setSidebarOverlayMounted}
+      resizable
+      side={sidebarSide}
+      width={`${SIDEBAR_DEFAULT_WIDTH}px`}
+    >
+      {sidebar}
+    </Pane>
+  ) : null
+
+  // Tool windows dock by side; order within a side runs from the window edge
+  // inward to main. Rank = distance from main (0 = innermost). On the left, the
+  // window edge is the first column, so emit high→low rank; on the right the
+  // window edge is the last column, so emit low→high. The preview rail isn't a
+  // tool window — it shadows the file browser's side.
+  const railPanes: { node: ReactNode; rank: number; side: 'left' | 'right' }[] = [
+    { node: chatSidebarPane, rank: 3, side: sidebarSide },
+    { node: fileBrowserPane, rank: 2, side: railSide },
+    { node: previewPane, rank: 1, side: railSide },
+    { node: terminalPane, rank: 0, side: terminalSide }
+  ].filter(pane => pane.node !== null)
+
+  const leftRailPanes = railPanes.filter(pane => pane.side === 'left').sort((a, b) => b.rank - a.rank)
+  const rightRailPanes = railPanes.filter(pane => pane.side === 'right').sort((a, b) => a.rank - b.rank)
 
   return (
     <AppShell
@@ -1141,21 +1176,7 @@ export function DesktopController() {
       terminalPaneOpen={terminalSidebarOpen}
       titlebarTools={titlebarToolGroups.flat.right}
     >
-      {!isSecondaryWindow() && (
-        <Pane
-          forceCollapsed={narrowViewport}
-          hoverReveal
-          id="chat-sidebar"
-          maxWidth={SIDEBAR_MAX_WIDTH}
-          minWidth={SIDEBAR_DEFAULT_WIDTH}
-          onOverlayActiveChange={setSidebarOverlayMounted}
-          resizable
-          side={sidebarSide}
-          width={`${SIDEBAR_DEFAULT_WIDTH}px`}
-        >
-          {sidebar}
-        </Pane>
-      )}
+      {leftRailPanes.map(pane => pane.node)}
       <PaneMain>
         <Routes>
           <Route element={chatView} index />
@@ -1194,15 +1215,7 @@ export function DesktopController() {
           <Route element={<Navigate replace to={NEW_CHAT_ROUTE} />} path="*" />
         </Routes>
       </PaneMain>
-      {/*
-        Order within a side maps to column order. Default (rail on the right):
-        main | terminal | preview | file-browser. Flipped (rail on the left):
-        mirror to file-browser | preview | terminal | main so terminal stays
-        adjacent to the chat.
-      */}
-      {panesFlipped ? fileBrowserPane : terminalPane}
-      {previewPane}
-      {panesFlipped ? terminalPane : fileBrowserPane}
+      {rightRailPanes.map(pane => pane.node)}
     </AppShell>
   )
 }

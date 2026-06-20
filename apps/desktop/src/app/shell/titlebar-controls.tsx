@@ -9,14 +9,8 @@ import { triggerHaptic } from '@/lib/haptics'
 import { cn } from '@/lib/utils'
 import { $hapticsMuted, toggleHapticsMuted } from '@/store/haptics'
 import { toggleKeybindPanel } from '@/store/keybinds'
-import {
-  $fileBrowserOpen,
-  $panesFlipped,
-  $sidebarOpen,
-  toggleFileBrowserOpen,
-  togglePanesFlipped,
-  toggleSidebarOpen
-} from '@/store/layout'
+import { $paneStates } from '@/store/panes'
+import { isAnyToolWindowOpenOnSide, toggleToolWindowSide } from '@/store/tool-windows'
 
 import { appViewForPath, isOverlayView } from '../routes'
 
@@ -50,9 +44,11 @@ export function TitlebarControls({ leftTools = [], tools = [], onOpenSettings }:
   const navigate = useNavigate()
   const location = useLocation()
   const hapticsMuted = useStore($hapticsMuted)
-  const fileBrowserOpen = useStore($fileBrowserOpen)
-  const sidebarOpen = useStore($sidebarOpen)
-  const panesFlipped = useStore($panesFlipped)
+  // Subscribe to pane open-state so the edge "hide panels" buttons reflect
+  // whether anything is currently shown on each side.
+  useStore($paneStates)
+  const leftSideOpen = isAnyToolWindowOpenOnSide('left')
+  const rightSideOpen = isAnyToolWindowOpenOnSide('right')
 
   const toggleHaptics = () => {
     if (!hapticsMuted) {
@@ -66,34 +62,18 @@ export function TitlebarControls({ leftTools = [], tools = [], onOpenSettings }:
     }
   }
 
-  // Each titlebar button controls the pane physically on its side, so a flip
-  // swaps which pane each one toggles. Default: sessions left, file browser
-  // right. Flipped: file browser left, sessions right. Sidebar toggles never
-  // carry an active highlight — they're plain show/hide affordances.
-  const fileBrowserEdge = { open: fileBrowserOpen, toggle: toggleFileBrowserOpen }
-  const sessionsEdge = { open: sidebarOpen, toggle: toggleSidebarOpen }
-  const leftEdge = panesFlipped ? fileBrowserEdge : sessionsEdge
-  const rightEdge = panesFlipped ? sessionsEdge : fileBrowserEdge
-
+  // Per-edge "hide panels" buttons collapse/restore every tool window docked on
+  // that side. Per-panel toggling lives on the JetBrains-style edge stripes; the
+  // panel placement itself is relocated via each stripe button's context menu.
   const leftToolbarTools: TitlebarTool[] = [
     {
       icon: <Codicon name="layout-sidebar-left" />,
       id: 'sidebar',
-      label: leftEdge.open ? t.titlebar.hideSidebar : t.titlebar.showSidebar,
+      label: leftSideOpen ? t.titlebar.hideSidebar : t.titlebar.showSidebar,
       onSelect: () => {
         triggerHaptic('tap')
-        leftEdge.toggle()
+        toggleToolWindowSide('left')
       }
-    },
-    {
-      icon: <Codicon name="arrow-swap" />,
-      id: 'flip-panes',
-      label: t.titlebar.swapSidebarSides,
-      onSelect: () => {
-        triggerHaptic('tap')
-        togglePanesFlipped()
-      },
-      title: t.titlebar.swapSidebarSidesTitle
     },
     ...leftTools
   ]
@@ -101,10 +81,10 @@ export function TitlebarControls({ leftTools = [], tools = [], onOpenSettings }:
   const rightSidebarTool: TitlebarTool = {
     icon: <Codicon name="layout-sidebar-right" />,
     id: 'right-sidebar',
-    label: rightEdge.open ? t.titlebar.hideRightSidebar : t.titlebar.showRightSidebar,
+    label: rightSideOpen ? t.titlebar.hideRightSidebar : t.titlebar.showRightSidebar,
     onSelect: () => {
       triggerHaptic('tap')
-      rightEdge.toggle()
+      toggleToolWindowSide('right')
     }
   }
 

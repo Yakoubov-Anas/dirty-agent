@@ -28,16 +28,17 @@ const SIDEBAR_SESSION_ORDER_STORAGE_KEY = 'hermes.desktop.sessionOrder'
 const SIDEBAR_SESSION_ORDER_MANUAL_STORAGE_KEY = 'hermes.desktop.sessionOrder.manual'
 const SIDEBAR_WORKSPACE_ORDER_STORAGE_KEY = 'hermes.desktop.workspaceOrder'
 const SIDEBAR_WORKSPACE_PARENT_ORDER_STORAGE_KEY = 'hermes.desktop.workspaceParentOrder'
-const PANES_FLIPPED_STORAGE_KEY = 'hermes.desktop.panesFlipped'
 
 export const CHAT_SIDEBAR_PANE_ID = 'chat-sidebar'
 export const FILE_BROWSER_PANE_ID = 'file-browser'
+export const TERMINAL_PANE_ID = 'terminal-sidebar'
 export const RIGHT_RAIL_PREVIEW_TAB_ID = 'preview'
 
 export type RightRailTabId = typeof RIGHT_RAIL_PREVIEW_TAB_ID | `file:${string}`
 
 ensurePaneRegistered(CHAT_SIDEBAR_PANE_ID, { open: true })
 ensurePaneRegistered(FILE_BROWSER_PANE_ID, { open: false })
+ensurePaneRegistered(TERMINAL_PANE_ID, { open: false })
 
 export const $sidebarOpen: ReadableAtom<boolean> = computed(
   $paneStates,
@@ -80,9 +81,6 @@ export const $sidebarCronOpen = atom(storedBoolean(SIDEBAR_CRON_OPEN_STORAGE_KEY
 // stays collapsed unless they've opened a platform before.
 export const $sidebarMessagingOpenIds = atom<string[]>(storedStringArray(SIDEBAR_MESSAGING_OPEN_STORAGE_KEY))
 export const $sidebarAgentsGrouped = atom(storedBoolean(SIDEBAR_AGENTS_GROUPED_STORAGE_KEY, false))
-// When true, the sessions sidebar moves to the right and the file browser +
-// preview rail move to the left — a mirror of the default layout.
-export const $panesFlipped = atom(storedBoolean(PANES_FLIPPED_STORAGE_KEY, false))
 export const $isSidebarResizing = atom(false)
 export const $sessionsLimit = atom(SIDEBAR_SESSIONS_PAGE_SIZE)
 
@@ -96,7 +94,6 @@ $sidebarWorkspaceParentOrderIds.subscribe(ids =>
   persistStringArray(SIDEBAR_WORKSPACE_PARENT_ORDER_STORAGE_KEY, [...ids])
 )
 $sidebarAgentsGrouped.subscribe(grouped => persistBoolean(SIDEBAR_AGENTS_GROUPED_STORAGE_KEY, grouped))
-$panesFlipped.subscribe(flipped => persistBoolean(PANES_FLIPPED_STORAGE_KEY, flipped))
 
 export function setSidebarWidth(width: number) {
   const bounded = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_DEFAULT_WIDTH, width))
@@ -129,10 +126,6 @@ export function requestSessionSearchFocus() {
   if (typeof window !== 'undefined') {
     window.setTimeout(() => window.dispatchEvent(new CustomEvent(SESSION_SEARCH_FOCUS_EVENT)), 0)
   }
-}
-
-export function togglePanesFlipped() {
-  $panesFlipped.set(!$panesFlipped.get())
 }
 
 export function selectRightRailTab(id: RightRailTabId) {

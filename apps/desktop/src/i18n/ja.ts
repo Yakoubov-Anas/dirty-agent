@@ -152,13 +152,19 @@ export const ja = defineLocale({
     showSidebar: 'サイドバーを表示',
     search: '検索',
     searchTitle: 'セッション、ビュー、アクションを検索',
-    swapSidebarSides: 'サイドバーの向きを切り替え',
-    swapSidebarSidesTitle: 'セッションとファイルブラウザーの位置を入れ替える',
     hideRightSidebar: '右サイドバーを非表示',
     showRightSidebar: '右サイドバーを表示',
     muteHaptics: '触覚フィードバックをオフ',
     unmuteHaptics: '触覚フィードバックをオン',
     openSettings: '設定を開く'
+  },
+
+  toolWindows: {
+    agent: 'セッション',
+    files: 'ファイル',
+    terminal: 'コンソール',
+    moveToLeft: '左へ移動',
+    moveToRight: '右へ移動'
   },
 
   language: {

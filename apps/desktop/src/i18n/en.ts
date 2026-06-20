@@ -151,14 +151,20 @@ export const en: Translations = {
     showSidebar: 'Show sidebar',
     search: 'Search',
     searchTitle: 'Search sessions, views, and actions',
-    swapSidebarSides: 'Swap sidebar sides',
-    swapSidebarSidesTitle: 'Swap the sessions and file browser sides',
     hideRightSidebar: 'Hide right sidebar',
     showRightSidebar: 'Show right sidebar',
     muteHaptics: 'Mute haptics',
     unmuteHaptics: 'Unmute haptics',
     openSettings: 'Open settings',
     openKeybinds: 'Keyboard shortcuts'
+  },
+
+  toolWindows: {
+    agent: 'Sessions',
+    files: 'Files',
+    terminal: 'Console',
+    moveToLeft: 'Move to left',
+    moveToRight: 'Move to right'
   },
 
   keybinds: {
@@ -213,7 +219,6 @@ export const en: Translations = {
       'view.showTerminal': 'Show terminal',
       'view.terminalSelection': 'Send terminal selection to composer',
       'view.closePreviewTab': 'Close preview tab',
-      'view.flipPanes': 'Swap sidebar sides',
       'appearance.toggleMode': 'Toggle light / dark',
       'profile.default': 'Switch to default profile',
       'profile.switch.1': 'Switch to profile 1',

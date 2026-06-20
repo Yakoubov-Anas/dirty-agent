@@ -363,7 +363,14 @@ export function Pane({
   // enter-delay is the hover-intent gate. No JS pointer math.
   if (overlayActive) {
     const edge = side === 'left' ? 'left' : 'right'
-    const offscreen = side === 'left' ? '-translate-x-[calc(100%+1rem)]' : 'translate-x-[calc(100%+1rem)]'
+
+    // The off-screen gap clears any chrome between the pane and the window edge
+    // (e.g. a tool-window stripe). Consumers raise --pane-reveal-offscreen-gap;
+    // it falls back to 1rem so the bare PaneShell still tucks fully away.
+    const offscreen =
+      side === 'left'
+        ? '-translate-x-[calc(100%+var(--pane-reveal-offscreen-gap,1rem))]'
+        : 'translate-x-[calc(100%+var(--pane-reveal-offscreen-gap,1rem))]'
 
     return (
       <div

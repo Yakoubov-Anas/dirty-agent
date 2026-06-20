@@ -9,10 +9,11 @@ import { useI18n } from '@/i18n'
 import { selectDesktopPaths } from '@/lib/desktop-fs'
 import { normalizeOrLocalPreviewTarget } from '@/lib/local-preview'
 import { cn } from '@/lib/utils'
-import { $panesFlipped } from '@/store/layout'
+import { FILE_BROWSER_PANE_ID } from '@/store/layout'
 import { notifyError } from '@/store/notifications'
 import { $filePreviewTarget, setCurrentSessionPreviewTarget } from '@/store/preview'
 import { $currentCwd } from '@/store/session'
+import { $toolWindowSide } from '@/store/tool-windows'
 
 import { filePathForTarget } from '../chat/right-rail/preview-file'
 import { SidebarPanelLabel } from '../shell/sidebar-label'
@@ -32,7 +33,7 @@ interface RightSidebarPaneProps {
 export function RightSidebarPane({ onActivateFile, onActivateFolder, onChangeCwd }: RightSidebarPaneProps) {
   const { t } = useI18n()
   const r = t.rightSidebar
-  const panesFlipped = useStore($panesFlipped)
+  const railSide = useStore($toolWindowSide(FILE_BROWSER_PANE_ID))
   const currentCwd = useStore($currentCwd).trim()
   const hasCwd = currentCwd.length > 0
   const openFileTarget = useStore($filePreviewTarget)
@@ -95,7 +96,7 @@ export function RightSidebarPane({ onActivateFile, onActivateFolder, onChangeCwd
       aria-label={r.aria}
       className={cn(
         'before:pointer-events-none relative flex h-full w-full min-w-0 flex-col overflow-hidden border-(--ui-stroke-secondary) bg-(--ui-sidebar-surface-background) pt-(--pane-header-reserve) text-(--ui-text-tertiary)',
-        panesFlipped
+        railSide === 'left'
           ? 'border-r shadow-[inset_-0.0625rem_0_0_color-mix(in_srgb,white_18%,transparent)]'
           : 'border-l shadow-[inset_0.0625rem_0_0_color-mix(in_srgb,white_18%,transparent)]'
       )}

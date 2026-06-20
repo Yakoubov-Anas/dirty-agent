@@ -8,14 +8,16 @@ import { SidebarProvider } from '@/components/ui/sidebar'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import {
   $fileBrowserOpen,
-  $panesFlipped,
   $sidebarOpen,
+  CHAT_SIDEBAR_PANE_ID,
   FILE_BROWSER_DEFAULT_WIDTH,
   FILE_BROWSER_PANE_ID,
-  setSidebarOpen
+  setSidebarOpen,
+  TERMINAL_PANE_ID
 } from '@/store/layout'
 import { $paneWidthOverride } from '@/store/panes'
 import { $connection } from '@/store/session'
+import { $toolWindowSide } from '@/store/tool-windows'
 import { isSecondaryWindow } from '@/store/windows'
 
 import { SIDEBAR_COLLAPSE_MEDIA_QUERY } from '../layout-constants'
@@ -24,6 +26,7 @@ import { KeybindPanel } from './keybind-panel'
 import { StatusbarControls, type StatusbarItem } from './statusbar-controls'
 import { TITLEBAR_HEIGHT, titlebarControlsPosition } from './titlebar'
 import { TitlebarControls, type TitlebarTool } from './titlebar-controls'
+import { ToolStripe } from './tool-stripe'
 
 interface AppShellProps {
   children: ReactNode
@@ -74,7 +77,9 @@ export function AppShell({
 }: AppShellProps) {
   const sidebarOpen = useStore($sidebarOpen)
   const fileBrowserOpen = useStore($fileBrowserOpen)
-  const panesFlipped = useStore($panesFlipped)
+  const sidebarSide = useStore($toolWindowSide(CHAT_SIDEBAR_PANE_ID))
+  const railSide = useStore($toolWindowSide(FILE_BROWSER_PANE_ID))
+  const terminalSide = useStore($toolWindowSide(TERMINAL_PANE_ID))
   const narrowViewport = useMediaQuery(SIDEBAR_COLLAPSE_MEDIA_QUERY)
   const fileBrowserWidthOverride = useStore($paneWidthOverride(FILE_BROWSER_PANE_ID))
   const connection = useStore($connection)
@@ -97,10 +102,13 @@ export function AppShell({
   // hover-reveal overlay (0px track) below the collapse breakpoint, so the edge
   // is uncovered there regardless of their stored open state. A standalone
   // session window renders no sidebar at all, so its edge is always uncovered.
-  const collapsibleLeftPaneOpen = panesFlipped ? fileBrowserOpen : sidebarOpen
+  const collapsibleLeftPaneOpen =
+    (sidebarSide === 'left' && sidebarOpen) || (railSide === 'left' && fileBrowserOpen)
+
   // The terminal + preview rails never force-collapse, so when they're the
-  // leftmost open pane (flipped layout) they cover the edge even when narrow.
-  const persistentLeftPaneOpen = panesFlipped && (terminalPaneOpen || previewPaneOpen)
+  // leftmost open pane they cover the edge even when narrow.
+  const persistentLeftPaneOpen =
+    (terminalSide === 'left' && terminalPaneOpen) || (railSide === 'left' && previewPaneOpen)
 
   const leftEdgePaneOpen =
     !isSecondaryWindow() && ((!narrowViewport && collapsibleLeftPaneOpen) || persistentLeftPaneOpen)
@@ -159,6 +167,11 @@ export function AppShell({
           // pane track via PaneShell's emitted --pane-chat-sidebar-width.
           '--sidebar-width': 'var(--pane-chat-sidebar-width)',
           '--titlebar-height': `${TITLEBAR_HEIGHT}px`,
+          // Width of the JetBrains-style edge stripes flanking the panes.
+          '--tool-stripe-width': '2.25rem',
+          // Hover-reveal panels must slide past the edge stripe to hide fully,
+          // so the off-screen gap = stripe width + the usual 1rem margin.
+          '--pane-reveal-offscreen-gap': hideTitlebarControls ? '1rem' : 'calc(2.25rem + 1rem)',
           // Panes reserve the titlebar zone only when there's no dedicated header
           // bar (secondary windows). With the bar present, the bar owns that
           // height and panes start flush below it — reserve 0 to avoid a gap.
@@ -192,25 +205,34 @@ export function AppShell({
       )}
 
       <main className="relative z-3 flex min-h-0 w-full flex-1 flex-col overflow-hidden transition-none">
-        <PaneShell className="min-h-0 flex-1">
-          {/* Secondary windows have no header bar, so the titlebar zone lives at
-              the top of the panes — keep it draggable there. Normal windows drag
-              from the dedicated header bar instead. */}
-          {hideTitlebarControls && (
-            <>
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute left-0 top-0 z-1 h-(--titlebar-height) w-(--titlebar-controls-left) [-webkit-app-region:drag]"
-              />
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute top-0 z-1 h-(--titlebar-height) left-[calc(var(--titlebar-controls-left)+(var(--titlebar-control-size)*2)+0.75rem)] right-[calc(var(--titlebar-tools-right)+var(--titlebar-tools-width)+0.75rem)] [-webkit-app-region:drag]"
-              />
-            </>
-          )}
+        <div className="flex min-h-0 w-full flex-1">
+          {/* Left tool-window stripe — permanent icon rail at the window edge.
+              Secondary windows are compact and carry no stripes. */}
+          {!hideTitlebarControls && <ToolStripe side="left" />}
 
-          {children}
-        </PaneShell>
+          <PaneShell className="min-h-0 flex-1">
+            {/* Secondary windows have no header bar, so the titlebar zone lives at
+                the top of the panes — keep it draggable there. Normal windows drag
+                from the dedicated header bar instead. */}
+            {hideTitlebarControls && (
+              <>
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-0 top-0 z-1 h-(--titlebar-height) w-(--titlebar-controls-left) [-webkit-app-region:drag]"
+                />
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute top-0 z-1 h-(--titlebar-height) left-[calc(var(--titlebar-controls-left)+(var(--titlebar-control-size)*2)+0.75rem)] right-[calc(var(--titlebar-tools-right)+var(--titlebar-tools-width)+0.75rem)] [-webkit-app-region:drag]"
+                />
+              </>
+            )}
+
+            {children}
+          </PaneShell>
+
+          {/* Right tool-window stripe. */}
+          {!hideTitlebarControls && <ToolStripe side="right" />}
+        </div>
 
         {/* Fixed overlays scoped to main's stacking context (terminal). Rendered
             after PaneShell so it paints over pane content, but its z stays under

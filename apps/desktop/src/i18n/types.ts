@@ -164,14 +164,20 @@ export interface Translations {
     showSidebar: string
     search: string
     searchTitle: string
-    swapSidebarSides: string
-    swapSidebarSidesTitle: string
     hideRightSidebar: string
     showRightSidebar: string
     muteHaptics: string
     unmuteHaptics: string
     openSettings: string
     openKeybinds: string
+  }
+
+  toolWindows: {
+    agent: string
+    files: string
+    terminal: string
+    moveToLeft: string
+    moveToRight: string
   }
 
   keybinds: {

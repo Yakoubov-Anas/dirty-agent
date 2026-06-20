@@ -45,7 +45,6 @@ import { normalizeSessionSource, sessionSourceLabel } from '@/lib/session-source
 import { cn } from '@/lib/utils'
 import { $cronJobs } from '@/store/cron'
 import {
-  $panesFlipped,
   $pinnedSessionIds,
   $sidebarAgentsGrouped,
   $sidebarCronOpen,
@@ -58,6 +57,7 @@ import {
   $sidebarSessionOrderManual,
   $sidebarWorkspaceOrderIds,
   $sidebarWorkspaceParentOrderIds,
+  CHAT_SIDEBAR_PANE_ID,
   pinSession,
   SESSION_SEARCH_FOCUS_EVENT,
   setPinnedSessionOrder,
@@ -94,6 +94,7 @@ import {
   $workingSessionIds,
   sessionPinId
 } from '@/store/session'
+import { $toolWindowSide } from '@/store/tool-windows'
 
 import { type AppView, ARTIFACTS_ROUTE, MESSAGING_ROUTE, SKILLS_ROUTE } from '../../routes'
 import { SidebarPanelLabel } from '../../shell/sidebar-label'
@@ -330,7 +331,7 @@ export function ChatSidebar({
   // Collapsed-but-overlay-mounted → render the full sidebar, not just the nav rail.
   const overlayMounted = useStore($sidebarOverlayMounted)
   const contentVisible = sidebarOpen || overlayMounted
-  const panesFlipped = useStore($panesFlipped)
+  const sidebarSide = useStore($toolWindowSide(CHAT_SIDEBAR_PANE_ID))
   const agentsGrouped = useStore($sidebarAgentsGrouped)
   const pinnedSessionIds = useStore($pinnedSessionIds)
   const pinsOpen = useStore($sidebarPinsOpen)
@@ -796,7 +797,7 @@ export function ChatSidebar({
     <Sidebar
       className={cn(
         'relative h-full min-w-0 overflow-hidden border-t-0 border-b-0 text-foreground transition-none',
-        panesFlipped ? 'border-l border-r-0' : 'border-r border-l-0',
+        sidebarSide === 'right' ? 'border-l border-r-0' : 'border-r border-l-0',
         sidebarOpen
           ? 'border-(--sidebar-edge-border) bg-(--ui-sidebar-surface-background) opacity-100'
           : 'pointer-events-none border-transparent bg-transparent opacity-0',

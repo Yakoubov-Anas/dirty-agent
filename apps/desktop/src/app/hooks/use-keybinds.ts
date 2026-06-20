@@ -16,7 +16,6 @@ import {
   requestSessionSearchFocus,
   setFileBrowserOpen,
   toggleFileBrowserOpen,
-  togglePanesFlipped,
   toggleSidebarOpen
 } from '@/store/layout'
 import {
@@ -161,7 +160,6 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
     },
     'view.showFiles': showFiles,
     'view.showTerminal': () => setTerminalTakeover(!$terminalTakeover.get()),
-    'view.flipPanes': togglePanesFlipped,
 
     'appearance.toggleMode': () => setMode(resolvedMode === 'dark' ? 'light' : 'dark'),
 

@@ -147,14 +147,20 @@ export const zh: Translations = {
     showSidebar: '显示侧边栏',
     search: '搜索',
     searchTitle: '搜索会话、视图与操作',
-    swapSidebarSides: '交换侧边栏位置',
-    swapSidebarSidesTitle: '交换会话栏和文件浏览器的位置',
     hideRightSidebar: '隐藏右侧栏',
     showRightSidebar: '显示右侧栏',
     muteHaptics: '关闭触感反馈',
     unmuteHaptics: '开启触感反馈',
     openSettings: '打开设置',
     openKeybinds: '键盘快捷键'
+  },
+
+  toolWindows: {
+    agent: '会话',
+    files: '文件',
+    terminal: '控制台',
+    moveToLeft: '移到左侧',
+    moveToRight: '移到右侧'
   },
 
   keybinds: {
@@ -207,7 +213,6 @@ export const zh: Translations = {
       'view.showTerminal': '显示终端',
       'view.terminalSelection': '将终端选区发送到输入框',
       'view.closePreviewTab': '关闭预览标签',
-      'view.flipPanes': '交换侧边栏位置',
       'appearance.toggleMode': '切换浅色/深色',
       'profile.default': '切换到默认配置',
       'profile.switch.1': '切换到配置 1',
