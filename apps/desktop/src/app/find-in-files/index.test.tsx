@@ -83,6 +83,8 @@ describe('FindInFilesDialog', () => {
     await waitFor(() => expect(requestEditorReveal).toHaveBeenCalled())
     expect(setCurrentSessionPreviewTarget).toHaveBeenCalled()
     expect(requestEditorReveal).toHaveBeenCalledWith(expect.objectContaining({ line: 3, path: '/proj/src/a.ts' }))
+    // The dialog closes after a result is opened.
+    await waitFor(() => expect(screen.queryByLabelText('Find in files')).toBeNull())
   })
 
   it('shows the replace row + Replace All in replace mode and calls the endpoint', async () => {

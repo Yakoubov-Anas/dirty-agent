@@ -123,6 +123,7 @@ export function FindInFilesDialog() {
 
       setCurrentSessionPreviewTarget(preview, 'file-browser', file.path)
       requestEditorReveal({ column, line, path: filePathForTarget(preview) })
+      closeFindInFiles()
     } catch (err) {
       notifyError(err, 'Could not open file')
     }
