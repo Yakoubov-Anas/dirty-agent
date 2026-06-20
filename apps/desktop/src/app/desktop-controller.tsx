@@ -31,6 +31,7 @@ import {
   FILE_BROWSER_MAX_WIDTH,
   FILE_BROWSER_MIN_WIDTH,
   FILE_BROWSER_PANE_ID,
+  GIT_COMMIT_PANE_ID,
   pinSession,
   setSidebarOverlayMounted,
   SIDEBAR_DEFAULT_WIDTH,
@@ -102,6 +103,8 @@ import { CommandPalette } from './command-palette'
 import { FindInFilesDialog } from './find-in-files'
 import { useGatewayBoot } from './gateway/hooks/use-gateway-boot'
 import { useGatewayRequest } from './gateway/hooks/use-gateway-request'
+import { GitCommitPane } from './git/commit-pane'
+import { useGitStatusWatch } from './git/use-git-status-watch'
 import { GoToFileDialog } from './go-to-file'
 import { useKeybinds } from './hooks/use-keybinds'
 import { SIDEBAR_COLLAPSE_MEDIA_QUERY } from './layout-constants'
@@ -207,6 +210,8 @@ export function DesktopController() {
   const gatewayState = useStore($gatewayState)
   const activeSessionId = useStore($activeSessionId)
   const currentCwd = useStore($currentCwd)
+  // Keep the git store (branch widget + Commit pane) tracking the workspace cwd.
+  useGitStatusWatch(currentCwd)
   const freshDraftReady = useStore($freshDraftReady)
   const resumeFailedSessionId = useStore($resumeFailedSessionId)
   const resumeExhaustedSessionId = useStore($resumeExhaustedSessionId)
@@ -217,6 +222,7 @@ export function DesktopController() {
   const sidebarSide = useStore($toolWindowSide(CHAT_SIDEBAR_PANE_ID))
   const railSide = useStore($toolWindowSide(FILE_BROWSER_PANE_ID))
   const terminalSide = useStore($toolWindowSide(TERMINAL_PANE_ID))
+  const gitSide = useStore($toolWindowSide(GIT_COMMIT_PANE_ID))
   const profileScope = useStore($profileScope)
   // Below SIDEBAR_COLLAPSE_BREAKPOINT_PX there's no room for a docked rail —
   // collapse both sidebars (without touching their stored open state) so the
@@ -1128,7 +1134,7 @@ export function DesktopController() {
       side={terminalSide}
       width="42vw"
     >
-      <div className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-(--ui-editor-surface-background) pt-(--pane-header-reserve)">
+      <div className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-(--ui-sidebar-surface-background) pt-(--pane-header-reserve)">
         <TerminalTabsBar />
         <TerminalSlot />
       </div>
@@ -1152,13 +1158,30 @@ export function DesktopController() {
     </Pane>
   ) : null
 
+  const gitCommitPane = !isSecondaryWindow() ? (
+    <Pane
+      defaultOpen={false}
+      disabled={!chatOpen}
+      id={GIT_COMMIT_PANE_ID}
+      key={GIT_COMMIT_PANE_ID}
+      maxWidth={SIDEBAR_MAX_WIDTH}
+      minWidth={SIDEBAR_DEFAULT_WIDTH}
+      resizable
+      side={gitSide}
+      width={`${SIDEBAR_DEFAULT_WIDTH}px`}
+    >
+      <GitCommitPane />
+    </Pane>
+  ) : null
+
   // Tool windows dock by side; order within a side runs from the window edge
   // inward to main. Rank = distance from main (0 = innermost). On the left, the
   // window edge is the first column, so emit high→low rank; on the right the
   // window edge is the last column, so emit low→high. The preview rail isn't a
   // tool window — it shadows the file browser's side.
   const railPanes: { node: ReactNode; rank: number; side: 'left' | 'right' }[] = [
-    { node: chatSidebarPane, rank: 3, side: sidebarSide },
+    { node: chatSidebarPane, rank: 4, side: sidebarSide },
+    { node: gitCommitPane, rank: 3, side: gitSide },
     { node: fileBrowserPane, rank: 2, side: railSide },
     { node: previewPane, rank: 1, side: railSide },
     { node: terminalPane, rank: 0, side: terminalSide }

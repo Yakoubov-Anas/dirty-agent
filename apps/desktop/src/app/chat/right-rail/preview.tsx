@@ -18,6 +18,7 @@ import { isDesktopFsRemoteMode, revealDesktopPathInOS } from '@/lib/desktop-fs'
 import { cn } from '@/lib/utils'
 import {
   $rightRailActiveTabId,
+  FILE_BROWSER_PANE_ID,
   RIGHT_RAIL_PREVIEW_TAB_ID,
   type RightRailTabId,
   selectRightRailTab
@@ -34,6 +35,7 @@ import {
   type PreviewTarget
 } from '@/store/preview'
 import { $currentCwd } from '@/store/session'
+import { $toolWindowSide } from '@/store/tool-windows'
 
 import { filePathForTarget, relativePathFromCwd } from './preview-file'
 import { PreviewPane } from './preview-pane'
@@ -80,6 +82,7 @@ export function ChatPreviewRail({ onRestartServer, setTitlebarToolGroup }: ChatP
   const previewTarget = useStore($previewTarget)
   const dirtyFiles = useStore($dirtyPreviewFiles)
   const cwd = useStore($currentCwd).trim()
+  const railSide = useStore($toolWindowSide(FILE_BROWSER_PANE_ID))
   const wheelCleanupRef = useRef<(() => void) | null>(null)
 
   // Vertical mouse-wheel scrolls the tab strip horizontally (the scrollbar is
@@ -136,7 +139,12 @@ export function ChatPreviewRail({ onRestartServer, setTitlebarToolGroup }: ChatP
   const isPreview = activeTab.id === RIGHT_RAIL_PREVIEW_TAB_ID
 
   return (
-    <aside className="relative flex h-full w-full min-w-0 flex-col overflow-hidden border-l border-(--ui-stroke-tertiary) bg-(--ui-editor-surface-background) text-(--ui-text-tertiary)">
+    <aside
+      className={cn(
+        'relative flex h-full w-full min-w-0 flex-col overflow-hidden border-(--ui-stroke-secondary) bg-(--ui-editor-surface-background) text-(--ui-text-tertiary)',
+        railSide === 'left' ? 'border-r' : 'border-l'
+      )}
+    >
       <div className="group/rail-tabs flex h-(--titlebar-height) shrink-0 border-b border-(--ui-stroke-tertiary) bg-(--ui-sidebar-surface-background)">
         <div
           className="flex min-w-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"

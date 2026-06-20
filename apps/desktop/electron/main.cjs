@@ -44,6 +44,7 @@ const { readWindowsUserEnvVar } = require('./windows-user-env.cjs')
 const { readDirForIpc } = require('./fs-read-dir.cjs')
 const { gitRootForIpc } = require('./git-root.cjs')
 const { worktreesForIpc } = require('./git-worktrees.cjs')
+const gitCli = require('./git-cli.cjs')
 const { OFFICIAL_REPO_HTTPS_URL, isOfficialSshRemote } = require('./update-remote.cjs')
 const { runRebuildWithRetry } = require('./update-rebuild.cjs')
 const {
@@ -6200,6 +6201,143 @@ ipcMain.handle('hermes:fs:readDir', async (_event, dirPath) => readDirForIpc(dir
 ipcMain.handle('hermes:fs:gitRoot', async (_event, startPath) => gitRootForIpc(startPath))
 
 ipcMain.handle('hermes:fs:worktrees', async (_event, cwds) => worktreesForIpc(cwds))
+
+// ─── Git (Commit tool window) ─────────────────────────────────────────────
+// All handlers resolve to { ok, ... } | { ok: false, error } so the renderer
+// can render failures inline instead of throwing across the IPC boundary.
+function gitErrorResult(error) {
+  return { error: error instanceof Error ? error.message : String(error), ok: false }
+}
+
+ipcMain.handle('hermes:git:status', async (_event, repoRoot) => {
+  try {
+    return await gitCli.gitStatus(resolveGitBinary(), repoRoot)
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
+
+ipcMain.handle('hermes:git:diff', async (_event, repoRoot, filePath, staged, untracked) => {
+  try {
+    return untracked
+      ? await gitCli.gitDiffUntracked(resolveGitBinary(), repoRoot, filePath)
+      : await gitCli.gitDiff(resolveGitBinary(), repoRoot, filePath, Boolean(staged))
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
+
+ipcMain.handle('hermes:git:stage', async (_event, repoRoot, paths) => {
+  try {
+    return await gitCli.gitStage(resolveGitBinary(), repoRoot, paths)
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
+
+ipcMain.handle('hermes:git:unstage', async (_event, repoRoot, paths) => {
+  try {
+    return await gitCli.gitUnstage(resolveGitBinary(), repoRoot, paths)
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
+
+ipcMain.handle('hermes:git:commit', async (_event, repoRoot, message, options) => {
+  try {
+    return await gitCli.gitCommit(resolveGitBinary(), repoRoot, message, options || {})
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
+
+ipcMain.handle('hermes:git:branches', async (_event, repoRoot) => {
+  try {
+    return await gitCli.gitBranches(resolveGitBinary(), repoRoot)
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
+
+ipcMain.handle('hermes:git:checkout', async (_event, repoRoot, branch) => {
+  try {
+    return await gitCli.gitCheckout(resolveGitBinary(), repoRoot, branch)
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
+
+ipcMain.handle('hermes:git:createBranch', async (_event, repoRoot, branch, startPoint) => {
+  try {
+    return await gitCli.gitCreateBranch(resolveGitBinary(), repoRoot, branch, startPoint)
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
+
+ipcMain.handle('hermes:git:renameBranch', async (_event, repoRoot, branch, newName) => {
+  try {
+    return await gitCli.gitRenameBranch(resolveGitBinary(), repoRoot, branch, newName)
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
+
+ipcMain.handle('hermes:git:deleteBranch', async (_event, repoRoot, branch, force) => {
+  try {
+    return await gitCli.gitDeleteBranch(resolveGitBinary(), repoRoot, branch, force)
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
+
+ipcMain.handle('hermes:git:merge', async (_event, repoRoot, branch) => {
+  try {
+    return await gitCli.gitMerge(resolveGitBinary(), repoRoot, branch)
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
+
+ipcMain.handle('hermes:git:rebase', async (_event, repoRoot, branch) => {
+  try {
+    return await gitCli.gitRebase(resolveGitBinary(), repoRoot, branch)
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
+
+ipcMain.handle('hermes:git:diffWorkingTree', async (_event, repoRoot, ref) => {
+  try {
+    return await gitCli.gitDiffWorkingTree(resolveGitBinary(), repoRoot, ref)
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
+
+ipcMain.handle('hermes:git:compareBranches', async (_event, repoRoot, base, target) => {
+  try {
+    return await gitCli.gitCompareBranches(resolveGitBinary(), repoRoot, base, target)
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
+
+ipcMain.handle('hermes:git:pull', async (_event, repoRoot) => {
+  try {
+    return await gitCli.gitPull(resolveGitBinary(), repoRoot)
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
+
+ipcMain.handle('hermes:git:push', async (_event, repoRoot) => {
+  try {
+    return await gitCli.gitPush(resolveGitBinary(), repoRoot)
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
 
 ipcMain.handle('hermes:terminal:start', async (event, payload = {}) => {
   if (!nodePty) {

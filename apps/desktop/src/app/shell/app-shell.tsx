@@ -20,6 +20,8 @@ import { $connection } from '@/store/session'
 import { $toolWindowSide } from '@/store/tool-windows'
 import { isSecondaryWindow } from '@/store/windows'
 
+import { BranchWidget } from '../git/branch-widget'
+import { GitDiffDialog } from '../git/diff-dialog'
 import { SIDEBAR_COLLAPSE_MEDIA_QUERY } from '../layout-constants'
 
 import { KeybindPanel } from './keybind-panel'
@@ -136,6 +138,12 @@ export function AppShell({
   const paneToolCount = titlebarTools?.filter(tool => !tool.hidden).length ?? 0
   const systemToolsWidth = `calc(${SYSTEM_TOOL_COUNT} * (var(--titlebar-control-size) + 0.25rem))`
 
+  // Where the fixed left control cluster ends, so the header's left section
+  // (branch widget) can start past it. Left cluster = sidebar toggle (1) plus
+  // any caller-supplied left titlebar tools, anchored at --titlebar-controls-left.
+  const leftToolCount = 1 + (leftTitlebarTools?.filter(tool => !tool.hidden).length ?? 0)
+  const leftToolsEnd = `calc(var(--titlebar-controls-left) + ${leftToolCount} * (var(--titlebar-control-size) + 0.25rem) + 0.5rem)`
+
   const fileBrowserWidth =
     fileBrowserWidthOverride !== undefined ? `${fileBrowserWidthOverride}px` : FILE_BROWSER_DEFAULT_WIDTH
 
@@ -181,6 +189,7 @@ export function AppShell({
           '--titlebar-controls-top': `${titlebarControls.top}px`,
           '--titlebar-tools-right': titlebarToolsRight,
           '--titlebar-tools-width': titlebarToolsWidth,
+          '--titlebar-left-tools-end': leftToolsEnd,
           // Anchor for the pane-tool cluster's right edge in TitlebarControls.
           // Sourced from the layout store rather than the PaneShell-emitted
           // --pane-*-width vars because the titlebar is a sibling of PaneShell
@@ -194,12 +203,23 @@ export function AppShell({
           {/* Dedicated full-width header block. Sits above every pane as its own
               row (its height pushes <main> down), giving the window/system
               controls their own band separated from the panels below. The
-              controls themselves stay `fixed` and land on this bar; the bar
-              supplies the solid background, bottom divider, and drag region. */}
-          <div
-            aria-hidden="true"
-            className="relative z-10 h-(--titlebar-height) w-full shrink-0 border-b border-(--ui-stroke-tertiary) bg-(--ui-chat-surface-background) [-webkit-app-region:drag]"
-          />
+              window/system control clusters stay `fixed` and land on this bar;
+              the bar supplies the background, divider, and drag region, plus
+              three flex sections (left / center / right). The branch widget sits
+              in the left section, past the fixed left control cluster. */}
+          <div className="relative z-10 flex h-(--titlebar-height) w-full shrink-0 items-center border-b border-(--ui-stroke-tertiary) bg-(--ui-chat-surface-background) [-webkit-app-region:drag]">
+            <div
+              className="flex min-w-0 items-center gap-1"
+              style={{ paddingLeft: 'var(--titlebar-left-tools-end)' }}
+            >
+              <BranchWidget />
+            </div>
+            <div className="flex flex-1 items-center justify-center" />
+            <div
+              className="flex min-w-0 items-center justify-end gap-1"
+              style={{ paddingRight: 'calc(var(--titlebar-tools-right) + var(--titlebar-tools-width) + 0.5rem)' }}
+            />
+          </div>
           <TitlebarControls leftTools={leftTitlebarTools} onOpenSettings={onOpenSettings} tools={titlebarTools} />
         </>
       )}
@@ -248,6 +268,9 @@ export function AppShell({
 
       {/* Keybind map dialog (titlebar ⌨ button / ⌘/). */}
       <KeybindPanel />
+
+      {/* Git compare / working-tree diff dialog. */}
+      <GitDiffDialog />
 
       {/* Mounted at the shell root (after overlays) so success/error toasts
           surface above every route and overlay — not just the chat view. */}

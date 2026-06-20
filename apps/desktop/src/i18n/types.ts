@@ -176,10 +176,53 @@ export interface Translations {
     agent: string
     files: string
     terminal: string
+    git: string
     moveToLeft: string
     moveToRight: string
     newConsole: string
     closeConsole: string
+  }
+
+  git: {
+    aria: string
+    title: string
+    refresh: string
+    notARepo: string
+    clean: string
+    noDiff: string
+    stagedChanges: string
+    changes: string
+    stageAll: string
+    unstageAll: string
+    commit: string
+    messagePlaceholder: string
+    branchWidgetTitle: string
+    searchPlaceholder: string
+    updateProject: string
+    push: string
+    newBranch: string
+    newBranchName: string
+    create: string
+    recent: string
+    local: string
+    remote: string
+    noBranches: string
+    checkout: string
+    newBranchFrom: (name: string) => string
+    mergeInto: (from: string, into: string) => string
+    rebaseOnto: (current: string, target: string) => string
+    rename: string
+    delete: string
+    renameTitle: (name: string) => string
+    deleteConfirm: (name: string) => string
+    cancel: string
+    binaryFile: string
+    compareWith: (name: string) => string
+    showDiffWorkingTree: string
+    compareTitle: (base: string, target: string) => string
+    diffWorkingTreeTitle: (name: string) => string
+    ahead: (count: string) => string
+    behind: (count: string) => string
   }
 
   keybinds: {

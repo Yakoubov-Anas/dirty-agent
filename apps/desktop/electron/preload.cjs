@@ -61,6 +61,29 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   readDir: dirPath => ipcRenderer.invoke('hermes:fs:readDir', dirPath),
   gitRoot: startPath => ipcRenderer.invoke('hermes:fs:gitRoot', startPath),
   worktrees: cwds => ipcRenderer.invoke('hermes:fs:worktrees', cwds),
+  git: {
+    status: repoRoot => ipcRenderer.invoke('hermes:git:status', repoRoot),
+    diff: (repoRoot, filePath, staged, untracked) =>
+      ipcRenderer.invoke('hermes:git:diff', repoRoot, filePath, staged, untracked),
+    stage: (repoRoot, paths) => ipcRenderer.invoke('hermes:git:stage', repoRoot, paths),
+    unstage: (repoRoot, paths) => ipcRenderer.invoke('hermes:git:unstage', repoRoot, paths),
+    commit: (repoRoot, message, options) => ipcRenderer.invoke('hermes:git:commit', repoRoot, message, options),
+    branches: repoRoot => ipcRenderer.invoke('hermes:git:branches', repoRoot),
+    checkout: (repoRoot, branch) => ipcRenderer.invoke('hermes:git:checkout', repoRoot, branch),
+    createBranch: (repoRoot, branch, startPoint) =>
+      ipcRenderer.invoke('hermes:git:createBranch', repoRoot, branch, startPoint),
+    renameBranch: (repoRoot, branch, newName) =>
+      ipcRenderer.invoke('hermes:git:renameBranch', repoRoot, branch, newName),
+    deleteBranch: (repoRoot, branch, force) =>
+      ipcRenderer.invoke('hermes:git:deleteBranch', repoRoot, branch, force),
+    merge: (repoRoot, branch) => ipcRenderer.invoke('hermes:git:merge', repoRoot, branch),
+    rebase: (repoRoot, branch) => ipcRenderer.invoke('hermes:git:rebase', repoRoot, branch),
+    diffWorkingTree: (repoRoot, ref) => ipcRenderer.invoke('hermes:git:diffWorkingTree', repoRoot, ref),
+    compareBranches: (repoRoot, base, target) =>
+      ipcRenderer.invoke('hermes:git:compareBranches', repoRoot, base, target),
+    pull: repoRoot => ipcRenderer.invoke('hermes:git:pull', repoRoot),
+    push: repoRoot => ipcRenderer.invoke('hermes:git:push', repoRoot)
+  },
   terminal: {
     dispose: id => ipcRenderer.invoke('hermes:terminal:dispose', id),
     resize: (id, size) => ipcRenderer.invoke('hermes:terminal:resize', id, size),

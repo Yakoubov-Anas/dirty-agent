@@ -24,7 +24,7 @@ export function TerminalTab({ active, cwd, onAddSelectionToChat }: TerminalTabPr
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="relative min-h-0 flex-1 bg-(--ui-editor-surface-background) p-2">
+      <div className="relative min-h-0 flex-1 bg-(--ui-sidebar-surface-background) p-2">
         {status === 'starting' && (
           <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
             <Loader
@@ -59,7 +59,7 @@ export function TerminalTab({ active, cwd, onAddSelectionToChat }: TerminalTabPr
             with the app and follows light/dark; the xterm canvas itself is
             painted the resolved surface color in use-terminal-session. */}
         <div
-          className="h-full min-h-0 overflow-hidden text-(--ui-text-secondary) [&_.xterm]:h-full [&_.xterm-screen]:bg-(--ui-editor-surface-background)! [&_.xterm-viewport]:bg-(--ui-editor-surface-background)!"
+          className="h-full min-h-0 overflow-hidden text-(--ui-text-secondary) [&_.xterm]:h-full [&_.xterm-screen]:bg-(--ui-sidebar-surface-background)! [&_.xterm-viewport]:bg-(--ui-sidebar-surface-background)!"
           ref={hostRef}
         />
       </div>

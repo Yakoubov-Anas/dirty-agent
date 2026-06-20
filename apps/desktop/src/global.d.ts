@@ -80,6 +80,33 @@ declare global {
       // on-disk metadata locally. Returns null per cwd that isn't inside a
       // checkout (or can't be read — e.g. a remote backend's path).
       worktrees?: (cwds: string[]) => Promise<Record<string, HermesWorktreeInfo | null>>
+      git?: {
+        status: (repoRoot: string) => Promise<HermesGitStatusResult>
+        diff: (
+          repoRoot: string,
+          filePath: string,
+          staged: boolean,
+          untracked?: boolean
+        ) => Promise<HermesGitDiffResult>
+        stage: (repoRoot: string, paths: string[]) => Promise<HermesGitMutationResult>
+        unstage: (repoRoot: string, paths: string[]) => Promise<HermesGitMutationResult>
+        commit: (
+          repoRoot: string,
+          message: string,
+          options?: { amend?: boolean }
+        ) => Promise<HermesGitCommitResult>
+        branches: (repoRoot: string) => Promise<HermesGitBranchesResult>
+        checkout: (repoRoot: string, branch: string) => Promise<HermesGitMutationResult>
+        createBranch: (repoRoot: string, branch: string, startPoint?: string) => Promise<HermesGitMutationResult>
+        renameBranch: (repoRoot: string, branch: string, newName: string) => Promise<HermesGitMutationResult>
+        deleteBranch: (repoRoot: string, branch: string, force?: boolean) => Promise<HermesGitMutationResult>
+        merge: (repoRoot: string, branch: string) => Promise<HermesGitCommitResult>
+        rebase: (repoRoot: string, branch: string) => Promise<HermesGitCommitResult>
+        diffWorkingTree: (repoRoot: string, ref: string) => Promise<HermesGitDiffResult>
+        compareBranches: (repoRoot: string, base: string, target: string) => Promise<HermesGitDiffResult>
+        pull: (repoRoot: string) => Promise<HermesGitCommitResult>
+        push: (repoRoot: string) => Promise<HermesGitCommitResult>
+      }
       terminal: {
         dispose: (id: string) => Promise<boolean>
         onData: (id: string, callback: (payload: string) => void) => () => void
@@ -473,6 +500,43 @@ export interface HermesWorktreeInfo {
   // Current branch (or short detached-HEAD sha), null when unreadable.
   branch: null | string
 }
+
+export interface HermesGitFileEntry {
+  path: string
+  origPath?: string
+  staged: boolean
+  stagedStatus: null | string
+  unstaged: boolean
+  unstagedStatus: null | string
+  untracked: boolean
+  unmerged?: boolean
+}
+
+export type HermesGitStatusResult =
+  | {
+      ok: true
+      repoRoot: string
+      branch: null | string
+      ahead: number
+      behind: number
+      entries: HermesGitFileEntry[]
+    }
+  | { ok: false; error: string }
+
+export type HermesGitDiffResult = { ok: true; diff: string } | { ok: false; error: string }
+export type HermesGitMutationResult = { ok: true } | { ok: false; error: string }
+export type HermesGitCommitResult = { ok: true; output?: string } | { ok: false; error: string }
+
+export interface HermesGitBranch {
+  name: string
+  current: boolean
+  upstream: string
+}
+
+export type HermesGitBranchesResult =
+  | { ok: true; local: HermesGitBranch[]; remote: HermesGitBranch[] }
+  | { ok: false; error: string }
+
 
 export interface HermesReadDirEntry {
   name: string

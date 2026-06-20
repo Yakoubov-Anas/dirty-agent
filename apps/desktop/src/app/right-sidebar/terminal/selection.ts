@@ -78,10 +78,11 @@ export function terminalTheme(mode: 'light' | 'dark', palette?: DesktopTerminalP
   return overlay as ITheme
 }
 
-// Resolve --ui-editor-surface-background (a color-mix on the skin seed) to a
+// Resolve --ui-sidebar-surface-background (a color-mix on the skin seed) to a
 // concrete rgb for the WebGL renderer + contrast clamp. Custom props don't
 // resolve via getComputedStyle, so probe a real background-color. Read AFTER
 // applyTheme repaints (mount / rAF post-change) or it lags a frame behind.
+// Matches the console pane's container surface so the canvas blends seamlessly.
 export function resolveSurfaceColor(fallback: string): string {
   if (typeof document === 'undefined' || !document.body) {
     return fallback
@@ -89,7 +90,7 @@ export function resolveSurfaceColor(fallback: string): string {
 
   const probe = document.createElement('span')
   probe.style.cssText =
-    'position:absolute;visibility:hidden;pointer-events:none;background-color:var(--ui-editor-surface-background)'
+    'position:absolute;visibility:hidden;pointer-events:none;background-color:var(--ui-sidebar-surface-background)'
   document.body.appendChild(probe)
   const resolved = getComputedStyle(probe).backgroundColor
   probe.remove()

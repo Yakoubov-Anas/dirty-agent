@@ -32,6 +32,7 @@ const SIDEBAR_WORKSPACE_PARENT_ORDER_STORAGE_KEY = 'hermes.desktop.workspacePare
 export const CHAT_SIDEBAR_PANE_ID = 'chat-sidebar'
 export const FILE_BROWSER_PANE_ID = 'file-browser'
 export const TERMINAL_PANE_ID = 'terminal-sidebar'
+export const GIT_COMMIT_PANE_ID = 'git-commit'
 export const RIGHT_RAIL_PREVIEW_TAB_ID = 'preview'
 
 export type RightRailTabId = typeof RIGHT_RAIL_PREVIEW_TAB_ID | `file:${string}`
@@ -39,6 +40,7 @@ export type RightRailTabId = typeof RIGHT_RAIL_PREVIEW_TAB_ID | `file:${string}`
 ensurePaneRegistered(CHAT_SIDEBAR_PANE_ID, { open: true })
 ensurePaneRegistered(FILE_BROWSER_PANE_ID, { open: false })
 ensurePaneRegistered(TERMINAL_PANE_ID, { open: false })
+ensurePaneRegistered(GIT_COMMIT_PANE_ID, { open: false })
 
 export const $sidebarOpen: ReadableAtom<boolean> = computed(
   $paneStates,

@@ -56,6 +56,10 @@ function labelForToolWindow(id: ToolWindowId, t: ReturnType<typeof useI18n>['t']
     return t.toolWindows.terminal
   }
 
+  if (id === 'git-commit') {
+    return t.toolWindows.git
+  }
+
   return t.toolWindows.files
 }
 

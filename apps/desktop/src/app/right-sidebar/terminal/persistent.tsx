@@ -147,7 +147,7 @@ export function PersistentTerminals({ cwd, onAddSelectionToChat }: PersistentTer
           zIndex: 4,
           // Match the live skin surface so the header strip (transparent) and
           // body read as one cohesive pane instead of revealing a slab behind.
-          backgroundColor: 'var(--ui-editor-surface-background)',
+          backgroundColor: 'var(--ui-sidebar-surface-background)',
           contain: 'layout size paint'
         }
 
