@@ -27,7 +27,7 @@ vi.mock('@/store/notifications', () => ({
   notifyError: vi.fn()
 }))
 
-import { $findInFiles, closeFindInFiles, openFindInFiles } from '@/store/find-in-files'
+import { $findInFiles, $findInFilesSession, closeFindInFiles, openFindInFiles } from '@/store/find-in-files'
 
 import { FindInFilesDialog } from './index'
 
@@ -45,6 +45,7 @@ afterEach(() => {
   vi.clearAllMocks()
   closeFindInFiles()
   $findInFiles.set({ open: false, mode: 'find' })
+  $findInFilesSession.set({ query: '', replacement: '', caseSensitive: false, wholeWord: false, regexp: false, result: null })
 })
 
 describe('FindInFilesDialog', () => {
@@ -65,6 +66,27 @@ describe('FindInFilesDialog', () => {
 
     act(() => openFindInFiles('find'))
     expect(await screen.findByLabelText('Find in files')).toBeTruthy()
+  })
+
+  it('keeps previous results on reopen without refetching', async () => {
+    searchDesktopFiles.mockResolvedValue(RESULT)
+    renderDialog()
+
+    // First open + search.
+    act(() => openFindInFiles('find'))
+    fireEvent.change(await screen.findByLabelText('Find in files'), { target: { value: 'foo' } })
+    await waitFor(() => expect(screen.getByText('a.ts')).toBeTruthy())
+    expect(searchDesktopFiles).toHaveBeenCalledTimes(1)
+
+    // Close + reopen — results show immediately, no second search call.
+    act(() => closeFindInFiles())
+    await waitFor(() => expect(screen.queryByLabelText('Find in files')).toBeNull())
+    act(() => openFindInFiles('find'))
+
+    expect(await screen.findByLabelText('Find in files')).toBeTruthy()
+    expect(screen.getByText('a.ts')).toBeTruthy()
+    // Still only one search — the cached results were reused.
+    expect(searchDesktopFiles).toHaveBeenCalledTimes(1)
   })
 
   it('survives open → click result (auto-closes) → reopen', async () => {

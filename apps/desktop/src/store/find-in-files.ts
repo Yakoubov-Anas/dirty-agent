@@ -1,5 +1,7 @@
 import { atom } from 'nanostores'
 
+import type { FileSearchResult } from '@/lib/desktop-fs'
+
 export type FindInFilesMode = 'find' | 'replace'
 
 export interface FindInFilesState {
@@ -8,6 +10,33 @@ export interface FindInFilesState {
 }
 
 export const $findInFiles = atom<FindInFilesState>({ open: false, mode: 'find' })
+
+// Persisted form + results so reopening the dialog shows the previous search
+// instantly instead of re-fetching from scratch. The dialog seeds its local
+// state from here on mount and writes back as the user works.
+export interface FindInFilesSession {
+  query: string
+  replacement: string
+  caseSensitive: boolean
+  wholeWord: boolean
+  regexp: boolean
+  result: FileSearchResult | null
+}
+
+const EMPTY_SESSION: FindInFilesSession = {
+  query: '',
+  replacement: '',
+  caseSensitive: false,
+  wholeWord: false,
+  regexp: false,
+  result: null
+}
+
+export const $findInFilesSession = atom<FindInFilesSession>(EMPTY_SESSION)
+
+export function saveFindInFilesSession(patch: Partial<FindInFilesSession>) {
+  $findInFilesSession.set({ ...$findInFilesSession.get(), ...patch })
+}
 
 export function openFindInFiles(mode: FindInFilesMode = 'find') {
   // Always open (never toggle-close): the shortcut should reliably surface the

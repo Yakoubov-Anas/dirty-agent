@@ -14,12 +14,24 @@ import {
   searchDesktopFiles
 } from '@/lib/desktop-fs'
 import { normalizeOrLocalPreviewTarget } from '@/lib/local-preview'
-import { $findInFiles, closeFindInFiles, setFindInFilesMode } from '@/store/find-in-files'
+import {
+  $findInFiles,
+  $findInFilesSession,
+  closeFindInFiles,
+  saveFindInFilesSession,
+  setFindInFilesMode
+} from '@/store/find-in-files'
 import { notify, notifyError } from '@/store/notifications'
 import { requestEditorReveal, setCurrentSessionPreviewTarget } from '@/store/preview'
 import { $currentCwd } from '@/store/session'
 
 const SEARCH_DEBOUNCE_MS = 250
+
+// Stable signature of the inputs that affect a search result. Used to skip
+// refetching when reopening with unchanged params.
+function searchKey(p: { query: string; caseSensitive: boolean; wholeWord: boolean; regexp: boolean }): string {
+  return `${p.caseSensitive ? 1 : 0}${p.wholeWord ? 1 : 0}${p.regexp ? 1 : 0}\u0000${p.query}`
+}
 
 function basename(path: string): string {
   const parts = path.split(/[\\/]/)
@@ -38,17 +50,24 @@ export function FindInFilesDialog() {
   const { open, mode } = useStore($findInFiles)
   const cwd = useStore($currentCwd)
 
-  const [query, setQuery] = useState('')
-  const [replacement, setReplacement] = useState('')
-  const [caseSensitive, setCaseSensitive] = useState(false)
-  const [wholeWord, setWholeWord] = useState(false)
-  const [regexp, setRegexp] = useState(false)
-  const [result, setResult] = useState<FileSearchResult | null>(null)
+  // Seed from the persisted session so reopening shows the previous search
+  // immediately (no refetch flash).
+  const saved = $findInFilesSession.get()
+  const [query, setQuery] = useState(saved.query)
+  const [replacement, setReplacement] = useState(saved.replacement)
+  const [caseSensitive, setCaseSensitive] = useState(saved.caseSensitive)
+  const [wholeWord, setWholeWord] = useState(saved.wholeWord)
+  const [regexp, setRegexp] = useState(saved.regexp)
+  const [result, setResult] = useState<FileSearchResult | null>(saved.result)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<null | string>(null)
   const [replacing, setReplacing] = useState(false)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const searchRef = useRef<HTMLInputElement | null>(null)
+  // Signature of the params the current `result` was fetched for. The effect
+  // skips refetching when nothing relevant changed (reopen, focus toggles,
+  // remount with a persisted result) so reopening is instant.
+  const lastSearchKey = useRef(saved.result ? searchKey(saved) : null)
 
   // Focus the query field whenever the dialog opens.
   useEffect(() => {
@@ -75,6 +94,14 @@ export function FindInFilesDialog() {
       return
     }
 
+    // Already have results for these exact params (reopen, focus toggle,
+    // remount) — keep them, don't refetch.
+    if (lastSearchKey.current === searchKey({ caseSensitive, query, regexp, wholeWord })) {
+      setLoading(false)
+
+      return
+    }
+
     let cancelled = false
     setLoading(true)
 
@@ -91,6 +118,7 @@ export function FindInFilesDialog() {
         if (!cancelled) {
           setResult(res)
           setError(null)
+          lastSearchKey.current = searchKey({ caseSensitive, query, regexp, wholeWord })
         }
       } catch (err) {
         if (!cancelled) {
@@ -109,6 +137,11 @@ export function FindInFilesDialog() {
       window.clearTimeout(handle)
     }
   }, [open, query, caseSensitive, wholeWord, regexp, cwd])
+
+  // Persist the form + results so the next open restores them instantly.
+  useEffect(() => {
+    saveFindInFilesSession({ caseSensitive, query, regexp, replacement, result, wholeWord })
+  }, [query, replacement, caseSensitive, wholeWord, regexp, result])
 
   const fileCount = result?.files.length ?? 0
   const matchCount = result?.total ?? 0
