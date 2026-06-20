@@ -35,7 +35,7 @@ import {
 } from '@/store/preview'
 import { $currentCwd } from '@/store/session'
 
-import { filePathForTarget } from './preview-file'
+import { filePathForTarget, relativePathFromCwd } from './preview-file'
 import { PreviewPane } from './preview-pane'
 
 export const PREVIEW_RAIL_MIN_WIDTH = '18rem'
@@ -70,28 +70,6 @@ function tabLabelFor(target: PreviewTarget): string {
 /** Path of the file a tab points at, or its url for non-file (live) previews. */
 function tabPathFor(target: PreviewTarget): string {
   return target.kind === 'file' ? filePathForTarget(target) : target.url
-}
-
-/** `filePath` relative to `cwd`, or null when it is not inside the workspace.
- *  Separator- and case-insensitive so it works on Windows and with `file:`
- *  URLs; the returned slice preserves the original casing/separators. */
-function relativeToCwd(cwd: string, filePath: string): string | null {
-  if (!cwd || !filePath) {
-    return null
-  }
-
-  const root = cwd
-    .replace(/\\/g, '/')
-    .replace(/\/+$/, '')
-    .toLowerCase()
-
-  const full = filePath.replace(/\\/g, '/').toLowerCase()
-
-  if (full === root || !full.startsWith(`${root}/`)) {
-    return null
-  }
-
-  return filePath.slice(root.length).replace(/^[\\/]+/, '')
 }
 
 export function ChatPreviewRail({ onRestartServer, setTitlebarToolGroup }: ChatPreviewRailProps) {
@@ -272,7 +250,7 @@ function PreviewTabMenu({ cwd, onlyTab, tab }: PreviewTabMenuProps) {
   const p = t.preview
   const isFile = tab.target.kind === 'file'
   const fullPath = tabPathFor(tab.target)
-  const relPath = isFile ? relativeToCwd(cwd, fullPath) : null
+  const relPath = isFile ? relativePathFromCwd(cwd, fullPath) : null
   const canRevealInOS = isFile && !isDesktopFsRemoteMode() && Boolean(window.hermesDesktop?.revealInOS)
 
   const revealInOS = async () => {

@@ -1681,6 +1681,7 @@ export const en: Translations = {
     revealInOSFailed: 'Could not reveal file',
     closeTabLabel: 'Close',
     closeOthers: 'Close others',
+    breadcrumbAria: 'File path',
     console: {
       deselect: 'Deselect entry',
       select: 'Select entry',

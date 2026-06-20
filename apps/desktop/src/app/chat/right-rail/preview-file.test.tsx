@@ -44,7 +44,15 @@ vi.mock('@/components/ui/code-editor', () => ({
   )
 }))
 
-import { LocalFilePreview } from './preview-file'
+const revealPathInTree = vi.fn()
+
+vi.mock('@/app/right-sidebar/files/use-project-tree', () => ({
+  revealPathInTree: (path: string) => revealPathInTree(path)
+}))
+
+import { $currentCwd } from '@/store/session'
+
+import { LocalFilePreview, relativePathFromCwd } from './preview-file'
 
 const target: PreviewTarget = {
   kind: 'file',
@@ -59,6 +67,69 @@ afterEach(() => {
   cleanup()
   readDesktopFileText.mockReset()
   writeDesktopFileText.mockReset()
+  revealPathInTree.mockReset()
+  $currentCwd.set('')
+})
+
+describe('relativePathFromCwd', () => {
+  it('returns the workspace-relative path, separator/case-insensitive', () => {
+    expect(relativePathFromCwd('/work', '/work/src/app.py')).toBe('src/app.py')
+    expect(relativePathFromCwd('C:\\Proj', 'C:/proj/src/App.ts')).toBe('src/App.ts')
+  })
+
+  it('returns null for paths outside the workspace', () => {
+    expect(relativePathFromCwd('/work', '/other/app.py')).toBeNull()
+    expect(relativePathFromCwd('', '/work/app.py')).toBeNull()
+  })
+})
+
+describe('LocalFilePreview breadcrumb', () => {
+  it('renders clickable path crumbs that reveal in the tree', async () => {
+    $currentCwd.set('/work')
+    readDesktopFileText.mockResolvedValue({
+      byteSize: 12,
+      language: 'python',
+      path: '/work/src/app.py',
+      text: 'print("hi")'
+    })
+
+    const nested: PreviewTarget = {
+      kind: 'file',
+      label: 'app.py',
+      path: '/work/src/app.py',
+      previewKind: 'text',
+      source: '/work/src/app.py',
+      url: 'file:///work/src/app.py'
+    }
+
+    render(<LocalFilePreview reloadKey={0} target={nested} />)
+
+    await screen.findByRole('textbox')
+
+    const srcCrumb = screen.getByRole('button', { name: 'src' })
+    const fileCrumb = screen.getByRole('button', { name: 'app.py' })
+
+    fireEvent.click(srcCrumb)
+    expect(revealPathInTree).toHaveBeenCalledWith('/work/src')
+
+    fireEvent.click(fileCrumb)
+    expect(revealPathInTree).toHaveBeenCalledWith('/work/src/app.py')
+  })
+
+  it('renders no breadcrumb when the file is outside the workspace', async () => {
+    $currentCwd.set('/elsewhere')
+    readDesktopFileText.mockResolvedValue({
+      byteSize: 3,
+      language: 'text',
+      path: '/work/hello.py',
+      text: 'foo'
+    })
+
+    render(<LocalFilePreview reloadKey={0} target={target} />)
+
+    await screen.findByRole('textbox')
+    expect(screen.queryByRole('button', { name: 'hello.py' })).toBeNull()
+  })
 })
 
 describe('LocalFilePreview editing', () => {
