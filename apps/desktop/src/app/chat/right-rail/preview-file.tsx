@@ -22,6 +22,7 @@ import { Codicon } from '@/components/ui/codicon'
 import { translateNow, useI18n } from '@/i18n'
 import { readDesktopFileDataUrl, readDesktopFileText, writeDesktopFileText } from '@/lib/desktop-fs'
 import { cn } from '@/lib/utils'
+import { relativePathFromCwd } from '@/lib/workspace-path'
 import {
   $editorReveal,
   consumeEditorReveal,
@@ -158,27 +159,9 @@ export function filePathForTarget(target: PreviewTarget) {
   }
 }
 
-/** `filePath` relative to `cwd`, or null when it is not inside the workspace.
- *  Separator- and case-insensitive (Windows + `file:` URLs); the returned slice
- *  preserves the original casing/separators. */
-export function relativePathFromCwd(cwd: string, filePath: string): string | null {
-  if (!cwd || !filePath) {
-    return null
-  }
-
-  const root = cwd
-    .replace(/\\/g, '/')
-    .replace(/\/+$/, '')
-    .toLowerCase()
-
-  const full = filePath.replace(/\\/g, '/').toLowerCase()
-
-  if (full === root || !full.startsWith(`${root}/`)) {
-    return null
-  }
-
-  return filePath.slice(root.length).replace(/^[\\/]+/, '')
-}
+/** Re-exported for the preview tab menu; the implementation lives in the shared
+ *  workspace-path lib so the file tree can use it too. */
+export { relativePathFromCwd } from '@/lib/workspace-path'
 
 interface BreadcrumbSegment {
   name: string

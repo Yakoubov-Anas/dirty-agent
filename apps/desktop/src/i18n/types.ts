@@ -1269,6 +1269,9 @@ export interface Translations {
     refreshTree: string
     collapseAll: string
     revealFile: string
+    copyPath: string
+    copyRelativePath: string
+    revealInOS: string
     previewUnavailable: string
     couldNotPreview: (path: string) => string
     noProjectTitle: string

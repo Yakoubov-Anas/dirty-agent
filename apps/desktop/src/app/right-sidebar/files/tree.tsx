@@ -3,9 +3,19 @@ import { type NodeApi, type NodeRendererProps, Tree, type TreeApi } from 'react-
 
 import { PageLoader } from '@/components/page-loader'
 import { Codicon } from '@/components/ui/codicon'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
+import { CopyButton } from '@/components/ui/copy-button'
 import { useResizeObserver } from '@/hooks/use-resize-observer'
 import { useI18n } from '@/i18n'
+import { isDesktopFsRemoteMode, revealDesktopPathInOS } from '@/lib/desktop-fs'
 import { cn } from '@/lib/utils'
+import { relativePathFromCwd } from '@/lib/workspace-path'
 
 import { getFileTreeDndManager } from './dnd-manager'
 import type { TreeNode } from './use-project-tree'
@@ -136,6 +146,7 @@ export function ProjectTree({
           {props => (
             <ProjectTreeRow
               {...props}
+              cwd={cwd}
               onAttachFile={onActivateFile}
               onAttachFolder={onActivateFolder}
               onPreviewFile={onPreviewFile}
@@ -156,6 +167,7 @@ function TreeSizingState() {
 }
 
 function ProjectTreeRow({
+  cwd,
   dragHandle,
   node,
   onAttachFile,
@@ -163,6 +175,7 @@ function ProjectTreeRow({
   onPreviewFile,
   style
 }: NodeRendererProps<TreeNode> & {
+  cwd: string
   onAttachFile: (path: string) => void
   onAttachFolder: (path: string) => void
   onPreviewFile?: (path: string) => void
@@ -175,7 +188,7 @@ function ProjectTreeRow({
   const isPlaceholder = Boolean(node.data.placeholder)
   const isErrorPlaceholder = node.data.placeholder === 'error'
 
-  return (
+  const row = (
     <div
       aria-expanded={isFolder ? node.isOpen : undefined}
       aria-selected={node.isSelected}
@@ -248,5 +261,52 @@ function ProjectTreeRow({
       </span>
       <span className="min-w-0 flex-1 truncate">{node.data.name}</span>
     </div>
+  )
+
+  // Synthetic loading/error rows aren't real entries — no actions to offer.
+  if (isPlaceholder) {
+    return row
+  }
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      <ProjectTreeRowMenu cwd={cwd} isFolder={isFolder} path={node.data.id} />
+    </ContextMenu>
+  )
+}
+
+interface ProjectTreeRowMenuProps {
+  cwd: string
+  isFolder: boolean
+  path: string
+}
+
+function ProjectTreeRowMenu({ cwd, isFolder, path }: ProjectTreeRowMenuProps) {
+  const { t } = useI18n()
+  const r = t.rightSidebar
+  const relPath = relativePathFromCwd(cwd, path)
+  const canRevealInOS = !isDesktopFsRemoteMode() && Boolean(window.hermesDesktop?.revealInOS)
+
+  return (
+    <ContextMenuContent className="w-48">
+      <CopyButton appearance="context-menu-item" label={r.copyPath ?? 'Copy path'} text={path} />
+      {relPath && (
+        <CopyButton
+          appearance="context-menu-item"
+          label={r.copyRelativePath ?? 'Copy relative path'}
+          text={relPath}
+        />
+      )}
+      {canRevealInOS && (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={() => void revealDesktopPathInOS(path)}>
+            <Codicon name={isFolder ? 'folder-opened' : 'go-to-file'} size="0.875rem" />
+            {r.revealInOS ?? 'Reveal in file explorer'}
+          </ContextMenuItem>
+        </>
+      )}
+    </ContextMenuContent>
   )
 }
