@@ -1807,13 +1807,17 @@ def _fs_search_ripgrep(root: Path, q: "FsSearch") -> Optional[list[dict]]:
     cmd.extend(["--", q.query, str(root)])
 
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        # Capture bytes and decode UTF-8 ourselves — text=True would use the
+        # locale codec (cp1252 on Windows), which raises UnicodeDecodeError on
+        # ripgrep's UTF-8 JSON output for non-ASCII files.
+        proc = subprocess.run(cmd, capture_output=True, timeout=30)
     except (subprocess.TimeoutExpired, OSError):
         return None
 
+    stdout = (proc.stdout or b"").decode("utf-8", errors="replace")
     files: dict[str, dict] = {}
     total = 0
-    for line in proc.stdout.splitlines():
+    for line in stdout.splitlines():
         if total >= _FS_SEARCH_MAX_RESULTS:
             break
         try:

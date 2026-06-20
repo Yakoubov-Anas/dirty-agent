@@ -265,3 +265,18 @@ def test_fs_replace_scoped_to_files(client, tmp_path):
     assert response.json()["filesChanged"] == 1
     assert a.read_text() == "dog dog\n"
     assert b.read_text() == "cat\n"  # untouched — not in files list
+
+
+def test_fs_search_handles_non_ascii_content(client, tmp_path):
+    # Regression: ripgrep emits UTF-8 JSON; decoding stdout with the Windows
+    # locale codec (cp1252) raised UnicodeDecodeError. The endpoint must decode
+    # UTF-8 explicitly and return matches from files containing non-ASCII bytes.
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "unicode.txt").write_text("café foo résumé\nsnowman \u2603 foo\n", encoding="utf-8")
+
+    response = client.post("/api/fs/search", json={"query": "foo", "root": str(root)})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 2
