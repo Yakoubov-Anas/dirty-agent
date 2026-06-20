@@ -28,7 +28,7 @@ import { $currentCwd } from '@/store/session'
 const SEARCH_DEBOUNCE_MS = 250
 // Upper bound on match rows rendered at once — keeps a big result set from
 // stalling the dialog on open. Excess is summarized in a footer.
-const MAX_RENDERED_ROWS = 400
+const MAX_RENDERED_ROWS = 100
 
 // Stable signature of the inputs that affect a search result. Used to skip
 // refetching when reopening with unchanged params.
@@ -396,7 +396,7 @@ export function FindInFilesDialog() {
           {hiddenRows > 0 && (
             <div className="flex flex-col items-center gap-1 px-3 py-2 text-center text-[0.6875rem] text-muted-foreground">
               <span>
-                {hiddenRows} more match{hiddenRows === 1 ? '' : 'es'} hidden for performance.
+                {hiddenRows} more match{hiddenRows === 1 ? '' : 'es'} hidden.
               </span>
               <Button onClick={() => setShowAll(true)} size="xs" type="button" variant="secondary">
                 Show all
