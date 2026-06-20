@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { type NodeApi, type NodeRendererProps, Tree, type TreeApi } from 'react-arborist'
+import { type NodeApi, type NodeRendererProps, type RowRendererProps, Tree, type TreeApi } from 'react-arborist'
 
 import { PageLoader } from '@/components/page-loader'
 import { Codicon } from '@/components/ui/codicon'
@@ -141,6 +141,7 @@ export function ProjectTree({
           openByDefault={false}
           padding={0}
           ref={treeRef}
+          renderRow={ProjectRowWrapper}
           rowHeight={ROW_HEIGHT}
           width={size.width}
         >
@@ -165,6 +166,21 @@ function TreeSizingState() {
   const { t } = useI18n()
 
   return <PageLoader aria-label={t.rightSidebar.loadingFiles} className="min-h-24 px-3" />
+}
+
+// Custom row wrapper. The default react-arborist row binds
+// `onClick={node.handleClick}` which calls select() + activate(); activate()
+// fires onActivate → preview. Our inner node renderer already owns click
+// (select/toggle) and double-click (preview), and crucially: a context-menu
+// item selection dispatches a click-through that lands on this wrapper after
+// the menu closes — with the default handler that would open the file. Dropping
+// handleClick here keeps selection/preview working while stopping that.
+function ProjectRowWrapper({ attrs, children, innerRef }: RowRendererProps<TreeNode>) {
+  return (
+    <div {...attrs} onFocus={event => event.stopPropagation()} ref={innerRef}>
+      {children}
+    </div>
+  )
 }
 
 function ProjectTreeRow({
