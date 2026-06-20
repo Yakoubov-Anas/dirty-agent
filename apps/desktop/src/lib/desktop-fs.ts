@@ -94,6 +94,57 @@ export async function readDesktopFileDataUrl(path: string): Promise<string> {
   return typeof result === 'string' ? result : result.dataUrl || ''
 }
 
+export interface FileSearchOptions {
+  query: string
+  root?: string
+  caseSensitive?: boolean
+  regexp?: boolean
+  wholeWord?: boolean
+}
+
+export interface FileSearchMatch {
+  line: number
+  column: number
+  matchEnd: number
+  preview: string
+}
+
+export interface FileSearchFile {
+  path: string
+  matches: FileSearchMatch[]
+}
+
+export interface FileSearchResult {
+  files: FileSearchFile[]
+  total: number
+  truncated: boolean
+}
+
+export interface FileReplaceResult {
+  filesChanged: number
+  replacements: number
+}
+
+// Project-wide content search. Always routed through the backend (the desktop
+// always has one) since it uses ripgrep — there's no local IPC equivalent.
+export async function searchDesktopFiles(options: FileSearchOptions): Promise<FileSearchResult> {
+  return bridge().api<FileSearchResult>({
+    path: '/api/fs/search',
+    method: 'POST',
+    body: { ...options }
+  })
+}
+
+export async function replaceDesktopFiles(
+  options: FileSearchOptions & { replace: string; files?: string[] }
+): Promise<FileReplaceResult> {
+  return bridge().api<FileReplaceResult>({
+    path: '/api/fs/replace',
+    method: 'POST',
+    body: { ...options }
+  })
+}
+
 export async function desktopGitRoot(path: string): Promise<string | null> {
   const desktop = bridge()
 

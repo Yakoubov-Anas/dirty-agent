@@ -188,6 +188,8 @@ export const en: Translations = {
       'nav.artifacts': 'Open artifacts',
       'nav.cron': 'Open scheduled jobs',
       'nav.agents': 'Open agents',
+      'find.inFiles': 'Find in files',
+      'find.replaceInFiles': 'Replace in files',
       'session.new': 'New session',
       'session.newWindow': 'New session in window',
       'session.next': 'Next session',

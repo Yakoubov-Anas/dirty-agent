@@ -1,3 +1,4 @@
+import { useStore } from '@nanostores/react'
 import type * as React from 'react'
 import type {
   ComponentProps,
@@ -19,7 +20,13 @@ import { CodeEditor } from '@/components/ui/code-editor'
 import { translateNow, useI18n } from '@/i18n'
 import { readDesktopFileDataUrl, readDesktopFileText, writeDesktopFileText } from '@/lib/desktop-fs'
 import { cn } from '@/lib/utils'
-import { markPreviewFileSelfSaved, type PreviewTarget, setPreviewFileDirty } from '@/store/preview'
+import {
+  $editorReveal,
+  consumeEditorReveal,
+  markPreviewFileSelfSaved,
+  type PreviewTarget,
+  setPreviewFileDirty
+} from '@/store/preview'
 import { $currentCwd } from '@/store/session'
 import { useTheme } from '@/themes'
 
@@ -466,6 +473,23 @@ function EditableCodeView({
   const [savedText, setSavedText] = useState(initialText)
   const dirty = value !== savedText
 
+  // Consume a pending "jump to line" request targeting this file (from a
+  // Find-in-Files result click). Bump revealKey so the editor re-applies it
+  // even for repeat jumps to the same line.
+  const pendingReveal = useStore($editorReveal)
+  const [reveal, setReveal] = useState<{ line: number; column?: number } | null>(null)
+  const [revealKey, setRevealKey] = useState(0)
+  useEffect(() => {
+    if (pendingReveal && pendingReveal.path === filePath) {
+      const taken = consumeEditorReveal(filePath)
+
+      if (taken) {
+        setReveal({ column: taken.column, line: taken.line })
+        setRevealKey(k => k + 1)
+      }
+    }
+  }, [pendingReveal, filePath])
+
   // Refs so the Cmd+S keymap (which closes over the editor instance created
   // once) always sees the freshest text and saved baseline.
   const valueRef = useRef(value)
@@ -552,6 +576,8 @@ function EditableCodeView({
         }}
         onChange={setValue}
         onSave={() => void save()}
+        reveal={reveal}
+        revealKey={revealKey}
         value={initialText}
       />
       {/* Save failures must not be silent now that the status header is gone —

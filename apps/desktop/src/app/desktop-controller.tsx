@@ -54,8 +54,8 @@ import {
   $gatewayState,
   $messages,
   $messagingSessions,
-  $resumeFailedSessionId,
   $resumeExhaustedSessionId,
+  $resumeFailedSessionId,
   $selectedStoredSessionId,
   $sessions,
   $workingSessionIds,
@@ -96,6 +96,7 @@ import {
 } from './chat/right-rail'
 import { ChatSidebar } from './chat/sidebar'
 import { CommandPalette } from './command-palette'
+import { FindInFilesDialog } from './find-in-files'
 import { useGatewayBoot } from './gateway/hooks/use-gateway-boot'
 import { useGatewayRequest } from './gateway/hooks/use-gateway-request'
 import { useKeybinds } from './hooks/use-keybinds'
@@ -971,6 +972,7 @@ export function DesktopController() {
       <BootFailureOverlay />
       <CommandPalette />
       <SessionSwitcher />
+      <FindInFilesDialog />
 
       {settingsOpen && (
         <Suspense fallback={null}>

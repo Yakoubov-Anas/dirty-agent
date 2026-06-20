@@ -115,6 +115,33 @@ export function consumePreviewSelfSave(path: string): boolean {
   return recent
 }
 
+// A one-shot request to scroll the editor for `path` to `line` (1-based) and
+// place the cursor there — used when opening a Find-in-Files result. The
+// editor consumes it on mount/update when its file matches, then clears it.
+export interface EditorReveal {
+  path: string
+  line: number
+  column?: number
+}
+
+export const $editorReveal = atom<EditorReveal | null>(null)
+
+export function requestEditorReveal(reveal: EditorReveal) {
+  $editorReveal.set(reveal)
+}
+
+export function consumeEditorReveal(path: string): EditorReveal | null {
+  const pending = $editorReveal.get()
+
+  if (!pending || pending.path !== path) {
+    return null
+  }
+
+  $editorReveal.set(null)
+
+  return pending
+}
+
 $sessionPreviewRegistry.subscribe(persistSessionPreviewRegistry)
 
 function isSamePreviewTarget(a: PreviewTarget | null, b: PreviewTarget | null): boolean {

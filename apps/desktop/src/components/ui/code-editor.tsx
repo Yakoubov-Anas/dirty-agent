@@ -47,6 +47,10 @@ export interface CodeEditorProps {
   /** Cmd/Ctrl+L — add the current selection (or line) to the chat composer as
    *  a file ref. Receives the 1-based start/end line range of the selection. */
   onAddSelectionRef?: (range: { start: number; end: number }) => void
+  /** Scroll to + place the cursor on this 1-based line/column. Re-applied
+   *  whenever `revealKey` changes (so jumping to the same line twice works). */
+  reveal?: { line: number; column?: number } | null
+  revealKey?: number | string
 }
 
 // Transparent editor chrome so the editor blends with the themed preview pane
@@ -138,7 +142,9 @@ export function CodeEditor({
   className,
   onChange,
   onSave,
-  onAddSelectionRef
+  onAddSelectionRef,
+  reveal,
+  revealKey
 }: CodeEditorProps) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
@@ -270,6 +276,26 @@ export function CodeEditor({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docKey])
+
+  // Scroll to + select the requested line when `reveal`/`revealKey` changes.
+  useEffect(() => {
+    const view = viewRef.current
+
+    if (!view || !reveal) {
+      return
+    }
+
+    const lineNumber = Math.max(1, Math.min(view.state.doc.lines, reveal.line))
+    const line = view.state.doc.line(lineNumber)
+    const pos = Math.min(line.to, line.from + Math.max(0, reveal.column ?? 0))
+
+    view.dispatch({
+      effects: EditorView.scrollIntoView(pos, { y: 'center' }),
+      selection: { anchor: pos }
+    })
+    view.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revealKey])
 
   // Resolve + apply the language grammar.
   useEffect(() => {

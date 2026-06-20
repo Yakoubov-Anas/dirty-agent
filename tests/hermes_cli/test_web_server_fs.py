@@ -186,3 +186,82 @@ def test_fs_endpoints_require_auth(tmp_path):
     assert list_response.status_code == 401
     assert read_response.status_code == 401
     assert default_response.status_code == 401
+
+
+def test_fs_search_finds_matches(client, tmp_path):
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "a.txt").write_text("alpha foo\nbar foo\n")
+    (root / "b.txt").write_text("nothing\nfoo here\n")
+    (root / "c.txt").write_text("no hits\n")
+
+    response = client.post("/api/fs/search", json={"query": "foo", "root": str(root)})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 3
+    paths = {Path(f["path"]).name for f in data["files"]}
+    assert paths == {"a.txt", "b.txt"}
+    a = next(f for f in data["files"] if Path(f["path"]).name == "a.txt")
+    assert [m["line"] for m in a["matches"]] == [1, 2]
+
+
+def test_fs_search_case_and_word(client, tmp_path):
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "f.txt").write_text("Foo foo foobar\n")
+
+    # Case-sensitive: only the lowercase whole word "foo" (not "Foo"/"foobar").
+    response = client.post(
+        "/api/fs/search",
+        json={"query": "foo", "root": str(root), "caseSensitive": True, "wholeWord": True},
+    )
+    data = response.json()
+    assert data["total"] == 1
+
+
+def test_fs_search_invalid_regex_400(client, tmp_path):
+    response = client.post(
+        "/api/fs/search", json={"query": "(", "root": str(tmp_path), "regexp": True}
+    )
+    assert response.status_code == 400
+
+
+def test_fs_replace_across_files(client, tmp_path):
+    root = tmp_path / "proj"
+    root.mkdir()
+    a = root / "a.txt"
+    b = root / "b.txt"
+    a.write_text("foo bar foo\n")
+    b.write_text("baz\nfoo\n")
+
+    response = client.post(
+        "/api/fs/replace",
+        json={"query": "foo", "replace": "X", "root": str(root)},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["filesChanged"] == 2
+    assert data["replacements"] == 3
+    assert a.read_text() == "X bar X\n"
+    assert b.read_text() == "baz\nX\n"
+
+
+def test_fs_replace_scoped_to_files(client, tmp_path):
+    root = tmp_path / "proj"
+    root.mkdir()
+    a = root / "a.txt"
+    b = root / "b.txt"
+    a.write_text("cat cat\n")
+    b.write_text("cat\n")
+
+    response = client.post(
+        "/api/fs/replace",
+        json={"query": "cat", "replace": "dog", "root": str(root), "files": [str(a)]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["filesChanged"] == 1
+    assert a.read_text() == "dog dog\n"
+    assert b.read_text() == "cat\n"  # untouched — not in files list

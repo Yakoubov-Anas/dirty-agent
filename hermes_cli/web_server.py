@@ -1753,6 +1753,222 @@ async def fs_write_text(payload: FsWriteText):
     return {"byteSize": len(encoded), "path": str(target)}
 
 
+# ---------------------------------------------------------------------------
+# Project-wide find / replace (Find in Files)
+# ---------------------------------------------------------------------------
+
+_FS_SEARCH_MAX_FILE_BYTES = 2 * 1024 * 1024
+_FS_SEARCH_MAX_RESULTS = 2000
+_FS_SEARCH_SKIP_DIRS = {
+    ".git", "node_modules", ".venv", "venv", "__pycache__", ".mypy_cache",
+    ".pytest_cache", "dist", "build", ".next", ".turbo", "release",
+    ".idea", ".vscode", "target",
+}
+
+
+def _fs_search_root(raw: Optional[str]) -> Path:
+    """Resolve + validate the search root (defaults to the server cwd)."""
+    if raw and str(raw).strip():
+        root = _fs_path(raw)
+    else:
+        root = Path.cwd()
+    if not root.is_dir():
+        raise HTTPException(status_code=400, detail="Search root is not a directory")
+    return root
+
+
+def _fs_compile_query(q: "FsSearch") -> "re.Pattern[str]":
+    flags = 0 if q.caseSensitive else re.IGNORECASE
+    if q.regexp:
+        pattern = q.query
+    else:
+        pattern = re.escape(q.query)
+    if q.wholeWord:
+        pattern = rf"\b{pattern}\b"
+    try:
+        return re.compile(pattern, flags)
+    except re.error as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid regular expression: {exc}")
+
+
+def _fs_search_ripgrep(root: Path, q: "FsSearch") -> Optional[list[dict]]:
+    """Search with ripgrep when available. Returns None to signal fallback."""
+    rg = shutil.which("rg")
+    if not rg:
+        return None
+
+    cmd = [rg, "--json", "--max-filesize", str(_FS_SEARCH_MAX_FILE_BYTES)]
+    if not q.caseSensitive:
+        cmd.append("--ignore-case")
+    if q.wholeWord:
+        cmd.append("--word-regexp")
+    if not q.regexp:
+        cmd.append("--fixed-strings")
+    cmd.extend(["--", q.query, str(root)])
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+
+    files: dict[str, dict] = {}
+    total = 0
+    for line in proc.stdout.splitlines():
+        if total >= _FS_SEARCH_MAX_RESULTS:
+            break
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if event.get("type") != "match":
+            continue
+        data = event["data"]
+        path = data["path"].get("text")
+        if not path:
+            continue
+        entry = files.setdefault(path, {"path": path, "matches": []})
+        line_no = data["line_number"]
+        text = (data["lines"].get("text") or "").rstrip("\n")
+        for sub in data.get("submatches", []):
+            if total >= _FS_SEARCH_MAX_RESULTS:
+                break
+            entry["matches"].append({
+                "line": line_no,
+                "column": sub["start"],
+                "matchEnd": sub["end"],
+                "preview": text,
+            })
+            total += 1
+
+    return list(files.values())
+
+
+def _fs_search_python(root: Path, q: "FsSearch") -> list[dict]:
+    """Pure-Python fallback search (ripgrep unavailable)."""
+    pattern = _fs_compile_query(q)
+    files: list[dict] = []
+    total = 0
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in _FS_SEARCH_SKIP_DIRS]
+        if total >= _FS_SEARCH_MAX_RESULTS:
+            break
+        for name in filenames:
+            if total >= _FS_SEARCH_MAX_RESULTS:
+                break
+            fpath = Path(dirpath) / name
+            try:
+                if fpath.stat().st_size > _FS_SEARCH_MAX_FILE_BYTES:
+                    continue
+                with fpath.open("r", encoding="utf-8", errors="strict") as handle:
+                    matches = []
+                    for line_no, text in enumerate(handle, start=1):
+                        for m in pattern.finditer(text):
+                            matches.append({
+                                "line": line_no,
+                                "column": m.start(),
+                                "matchEnd": m.end(),
+                                "preview": text.rstrip("\n"),
+                            })
+                            total += 1
+                            if total >= _FS_SEARCH_MAX_RESULTS:
+                                break
+                        if total >= _FS_SEARCH_MAX_RESULTS:
+                            break
+            except (OSError, UnicodeDecodeError):
+                continue
+            if matches:
+                files.append({"path": str(fpath), "matches": matches})
+    return files
+
+
+class FsSearch(BaseModel):
+    query: str
+    root: Optional[str] = None
+    caseSensitive: bool = False
+    regexp: bool = False
+    wholeWord: bool = False
+
+
+@app.post("/api/fs/search")
+async def fs_search(payload: FsSearch):
+    if not payload.query:
+        return {"files": [], "total": 0, "truncated": False}
+
+    root = _fs_search_root(payload.root)
+    # Validate regex early so both engines surface the same 400.
+    _fs_compile_query(payload)
+
+    files = _fs_search_ripgrep(root, payload)
+    if files is None:
+        files = _fs_search_python(root, payload)
+
+    total = sum(len(f["matches"]) for f in files)
+    files.sort(key=lambda f: f["path"].lower())
+    return {"files": files, "total": total, "truncated": total >= _FS_SEARCH_MAX_RESULTS}
+
+
+class FsReplace(BaseModel):
+    query: str
+    replace: str
+    root: Optional[str] = None
+    caseSensitive: bool = False
+    regexp: bool = False
+    wholeWord: bool = False
+    # Restrict the replace to these absolute paths (the result set the user saw);
+    # omit to replace across every match under root.
+    files: Optional[list[str]] = None
+
+
+@app.post("/api/fs/replace")
+async def fs_replace(payload: FsReplace):
+    if not payload.query:
+        raise HTTPException(status_code=400, detail="Empty search query")
+
+    root = _fs_search_root(payload.root)
+    pattern = _fs_compile_query(payload)
+    # In fixed-string mode \-sequences in the replacement are literal; in regex
+    # mode they're backrefs (re.sub semantics).
+    replacement = payload.replace if payload.regexp else payload.replace.replace("\\", "\\\\")
+
+    if payload.files is not None:
+        targets = [_fs_path(p) for p in payload.files]
+    else:
+        result = _fs_search_python(root, payload)
+        targets = [_fs_path(f["path"]) for f in result]
+
+    files_changed = 0
+    replacements = 0
+    for target in targets:
+        reason = _fs_write_block_reason(target)
+        if reason is not None:
+            continue
+        try:
+            if not target.is_file() or target.stat().st_size > _FS_SEARCH_MAX_FILE_BYTES:
+                continue
+            original = target.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+
+        new_text, count = pattern.subn(replacement, original)
+        if count == 0 or new_text == original:
+            continue
+
+        tmp = target.with_name(target.name + ".tmp")
+        try:
+            tmp.write_text(new_text, encoding="utf-8")
+            os.replace(tmp, target)
+        except OSError:
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
+            continue
+        files_changed += 1
+        replacements += count
+
+    return {"filesChanged": files_changed, "replacements": replacements}
+
+
 @app.get("/api/fs/read-data-url")
 async def fs_read_data_url(path: str):
     target, st = _fs_regular_file(_fs_path(path))

@@ -72,7 +72,9 @@ export const KEYBIND_ACTIONS: readonly KeybindActionMeta[] = [
   { id: 'session.next', category: 'session', defaults: ['ctrl+tab'] },
   { id: 'session.prev', category: 'session', defaults: ['ctrl+shift+tab'] },
   ...SESSION_SLOT_ACTIONS,
-  { id: 'session.focusSearch', category: 'session', defaults: ['mod+shift+f'] },
+  // mod+shift+f is reserved for project-wide Find in Files (find.inFiles);
+  // the sidebar session filter focus moves to mod+shift+s.
+  { id: 'session.focusSearch', category: 'session', defaults: ['mod+shift+s'] },
   { id: 'session.togglePin', category: 'session', defaults: [] },
 
   // ── Navigation ───────────────────────────────────────────────────────────
@@ -85,6 +87,10 @@ export const KEYBIND_ACTIONS: readonly KeybindActionMeta[] = [
   { id: 'nav.artifacts', category: 'navigation', defaults: [] },
   { id: 'nav.cron', category: 'navigation', defaults: [] },
   { id: 'nav.agents', category: 'navigation', defaults: [] },
+
+  // Project-wide find / replace in files (JetBrains-style dialog).
+  { id: 'find.inFiles', category: 'navigation', defaults: ['mod+shift+f'] },
+  { id: 'find.replaceInFiles', category: 'navigation', defaults: ['mod+shift+r'] },
 
   // ── View (layout + appearance + the shortcuts panel itself) ───────────────
   { id: 'view.toggleSidebar', category: 'view', defaults: ['mod+b'] },
