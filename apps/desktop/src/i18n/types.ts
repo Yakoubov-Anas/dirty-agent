@@ -178,6 +178,8 @@ export interface Translations {
     terminal: string
     moveToLeft: string
     moveToRight: string
+    newConsole: string
+    closeConsole: string
   }
 
   keybinds: {

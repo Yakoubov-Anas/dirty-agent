@@ -109,7 +109,8 @@ import { ModelPickerOverlay } from './model-picker-overlay'
 import { ModelVisibilityOverlay } from './model-visibility-overlay'
 import { RightSidebarPane } from './right-sidebar'
 import { $terminalTakeover } from './right-sidebar/store'
-import { PersistentTerminal, TerminalSlot } from './right-sidebar/terminal/persistent'
+import { PersistentTerminals, TerminalSlot } from './right-sidebar/terminal/persistent'
+import { TerminalTabsBar } from './right-sidebar/terminal/tabs'
 import { CRON_ROUTE, NEW_CHAT_ROUTE, routeSessionId, sessionRoute, SETTINGS_ROUTE } from './routes'
 import { SessionPickerOverlay } from './session-picker-overlay'
 import { SessionSwitcher } from './session-switcher'
@@ -949,11 +950,12 @@ export function DesktopController() {
     />
   )
 
-  // One PTY-backed terminal mounted forever; <TerminalSlot /> placeholders decide
-  // where it shows. Lives in main's stacking context (not the root overlay layer)
-  // so pane resize handles still paint above it. Toggling never rebuilds the shell.
+  // One PTY-backed terminal per console tab, mounted forever; <TerminalSlot />
+  // placeholders decide where they show. Lives in main's stacking context (not
+  // the root overlay layer) so pane resize handles still paint above it.
+  // Toggling never rebuilds the shells.
   const mainOverlays = (
-    <PersistentTerminal cwd={currentCwd} onAddSelectionToChat={composer.addTerminalSelectionAttachment} />
+    <PersistentTerminals cwd={currentCwd} onAddSelectionToChat={composer.addTerminalSelectionAttachment} />
   )
 
   const overlays = (
@@ -1127,6 +1129,7 @@ export function DesktopController() {
       width="42vw"
     >
       <div className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-(--ui-editor-surface-background) pt-(--pane-header-reserve)">
+        <TerminalTabsBar />
         <TerminalSlot />
       </div>
     </Pane>

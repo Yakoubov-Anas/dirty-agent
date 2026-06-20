@@ -159,7 +159,9 @@ export const zhHant = defineLocale({
     files: '檔案',
     terminal: '主控台',
     moveToLeft: '移到左側',
-    moveToRight: '移到右側'
+    moveToRight: '移到右側',
+    newConsole: '新增主控台',
+    closeConsole: '關閉主控台'
   },
 
   language: {

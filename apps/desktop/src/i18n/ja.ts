@@ -164,7 +164,9 @@ export const ja = defineLocale({
     files: 'ファイル',
     terminal: 'コンソール',
     moveToLeft: '左へ移動',
-    moveToRight: '右へ移動'
+    moveToRight: '右へ移動',
+    newConsole: '新しいコンソール',
+    closeConsole: 'コンソールを閉じる'
   },
 
   language: {

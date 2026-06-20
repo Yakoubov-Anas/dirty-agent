@@ -164,7 +164,9 @@ export const en: Translations = {
     files: 'Files',
     terminal: 'Console',
     moveToLeft: 'Move to left',
-    moveToRight: 'Move to right'
+    moveToRight: 'Move to right',
+    newConsole: 'New console',
+    closeConsole: 'Close console'
   },
 
   keybinds: {

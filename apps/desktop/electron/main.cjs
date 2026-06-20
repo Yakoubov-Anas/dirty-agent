@@ -359,6 +359,8 @@ const APP_ICON_PATHS = [
 
 let rendererTitleBarTheme = null
 const terminalSessions = new Map()
+// Marks a webContents that already has its terminal 'destroyed' cleanup hook.
+const TERMINAL_DESTROY_HOOK = Symbol('hermesTerminalDestroyHook')
 
 // Force the NATIVE window appearance (vibrancy material, titlebar, the
 // pre-first-paint window background) to follow the APP theme instead of the
@@ -6216,7 +6218,13 @@ ipcMain.handle('hermes:terminal:start', async (event, payload = {}) => {
     cwd,
     env: terminalShellEnv(),
     name: 'xterm-256color',
-    rows
+    rows,
+    // Windows-only: use the bundled ConPTY DLL kill path. node-pty's default
+    // ConPTY path forks a `conpty_console_list_agent` on kill() that calls
+    // AttachConsole on the (already-dead) shell PID and crashes with
+    // "AttachConsole failed" when a terminal tab is closed. The DLL path skips
+    // that fork entirely. Ignored by node-pty's UnixTerminal on macOS/Linux.
+    useConptyDll: true
   })
 
   terminalSessions.set(id, { pty: ptyProcess, webContentsId: event.sender.id })
@@ -6234,7 +6242,22 @@ ipcMain.handle('hermes:terminal:start', async (event, payload = {}) => {
     terminalSessions.delete(id)
     send('exit', { code: exitCode, signal: signal || null })
   })
-  event.sender.once('destroyed', () => disposeTerminalSession(id))
+
+  // One 'destroyed' handler per webContents (not per session): with many console
+  // tabs sharing a sender, a per-session listener would pile up past Node's
+  // default MaxListeners(10) and warn. This disposes every session owned by the
+  // destroyed sender. Tagged on the sender so we attach exactly once.
+  if (!event.sender[TERMINAL_DESTROY_HOOK]) {
+    event.sender[TERMINAL_DESTROY_HOOK] = true
+    const senderId = event.sender.id
+    event.sender.once('destroyed', () => {
+      for (const [sessionId, info] of [...terminalSessions.entries()]) {
+        if (info.webContentsId === senderId) {
+          disposeTerminalSession(sessionId)
+        }
+      }
+    })
+  }
 
   return { cwd, id, shell: name }
 })

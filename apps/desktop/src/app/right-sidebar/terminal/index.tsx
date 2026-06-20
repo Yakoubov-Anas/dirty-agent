@@ -1,49 +1,29 @@
 import '@xterm/xterm/css/xterm.css'
 
 import { Button } from '@/components/ui/button'
-import { Codicon } from '@/components/ui/codicon'
+import { KbdCombo } from '@/components/ui/kbd'
 import { Loader } from '@/components/ui/loader'
-import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
 
-import { SidebarPanelLabel } from '../../shell/sidebar-label'
-import { setTerminalTakeover } from '../store'
-
-import { KbdCombo } from '@/components/ui/kbd'
 import { useTerminalSession } from './use-terminal-session'
 
 interface TerminalTabProps {
+  active: boolean
   cwd: string
   onAddSelectionToChat: (text: string, label?: string) => void
 }
 
-export function TerminalTab({ cwd, onAddSelectionToChat }: TerminalTabProps) {
+export function TerminalTab({ active, cwd, onAddSelectionToChat }: TerminalTabProps) {
   const { t } = useI18n()
 
-  const { addSelectionToChat, hostRef, selection, selectionStyle, shellName, status } = useTerminalSession({
+  const { addSelectionToChat, hostRef, selection, selectionStyle, status } = useTerminalSession({
+    active,
     cwd,
     onAddSelectionToChat
   })
 
-  const label = t.rightSidebar.terminalHide
-
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex h-8 shrink-0 items-center gap-2 px-2.5">
-        <SidebarPanelLabel className="text-(--ui-text-secondary)!">{shellName}</SidebarPanelLabel>
-        <Tip label={label}>
-          <Button
-            aria-label={label}
-            className="ml-auto size-6 rounded-md text-(--ui-text-secondary)!"
-            onClick={() => setTerminalTakeover(false)}
-            size="icon"
-            type="button"
-            variant="ghost"
-          >
-            <Codicon name="close" size="0.875rem" />
-          </Button>
-        </Tip>
-      </div>
       <div className="relative min-h-0 flex-1 bg-(--ui-editor-surface-background) p-2">
         {status === 'starting' && (
           <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">

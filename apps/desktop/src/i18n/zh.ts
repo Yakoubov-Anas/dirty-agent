@@ -160,7 +160,9 @@ export const zh: Translations = {
     files: '文件',
     terminal: '控制台',
     moveToLeft: '移到左侧',
-    moveToRight: '移到右侧'
+    moveToRight: '移到右侧',
+    newConsole: '新建控制台',
+    closeConsole: '关闭控制台'
   },
 
   keybinds: {

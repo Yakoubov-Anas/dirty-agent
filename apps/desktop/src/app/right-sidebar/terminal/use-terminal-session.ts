@@ -12,7 +12,7 @@ import { useTheme } from '@/themes/context'
 
 import { $terminalInjection } from '../store'
 
-import { makeTerminalReader, setActiveTerminalReader } from './buffer'
+import { clearActiveTerminalReader, makeTerminalReader, setActiveTerminalReader } from './buffer'
 import {
   isAddSelectionShortcut,
   resolveSurfaceColor,
@@ -132,6 +132,7 @@ function stripInitialPromptGap(data: string) {
 }
 
 interface UseTerminalSessionOptions {
+  active: boolean
   cwd: string
   onAddSelectionToChat: (text: string, label?: string) => void
 }
@@ -232,7 +233,7 @@ function quotePathForShell(path: string, shellName: string): string {
   return `'${path.replace(/'/g, "'\\''")}'`
 }
 
-export function useTerminalSession({ cwd, onAddSelectionToChat }: UseTerminalSessionOptions) {
+export function useTerminalSession({ active, cwd, onAddSelectionToChat }: UseTerminalSessionOptions) {
   // Key off renderedMode (the painted surface type), not resolvedMode (the
   // clicked switch) — a skin can keep a light surface in "dark" mode, and we
   // must match the surface or the ANSI palette inverts against it. themeName
@@ -253,6 +254,17 @@ export function useTerminalSession({ cwd, onAddSelectionToChat }: UseTerminalSes
   const selectionLabelRef = useRef('')
   const selectionRef = useRef('')
   const onAddSelectionToChatRef = useRef(onAddSelectionToChat)
+  // Several console tabs run at once, but only the active one registers as the
+  // agent-visible reader, owns ⌘L, flushes injections, and takes focus.
+  const activeRef = useRef(active)
+  const readerRef = useRef<ReturnType<typeof makeTerminalReader> | null>(null)
+  // Captured at spawn time so each console keeps the cwd it was opened in. A
+  // later workspace-cwd change must NOT respawn every live tab (it would kill
+  // running processes); new tabs read the current value when they mount.
+  const cwdRef = useRef(cwd)
+  // Holds the mount effect's fit routine so the activation effect can re-fit a
+  // tab that was resized while hidden.
+  const refitRef = useRef<(() => void) | null>(null)
   const [status, setStatus] = useState<TerminalStatus>('starting')
   const [selection, setSelection] = useState('')
   const [selectionStyle, setSelectionStyle] = useState<CSSProperties | null>(null)
@@ -261,6 +273,14 @@ export function useTerminalSession({ cwd, onAddSelectionToChat }: UseTerminalSes
   useEffect(() => {
     onAddSelectionToChatRef.current = onAddSelectionToChat
   }, [onAddSelectionToChat])
+
+  useEffect(() => {
+    activeRef.current = active
+  }, [active])
+
+  useEffect(() => {
+    cwdRef.current = cwd
+  }, [cwd])
 
   // Live selection at call time. A redraw-heavy TUI (spinners, clocks) outruns
   // onSelectionChange, so trust xterm directly — fall back to the native
@@ -300,7 +320,7 @@ export function useTerminalSession({ cwd, onAddSelectionToChat }: UseTerminalSes
   // must reach the shell as clear-screen.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!isAddSelectionShortcut(event) || !readSelection().trim()) {
+      if (!activeRef.current || !isAddSelectionShortcut(event) || !readSelection().trim()) {
         return
       }
 
@@ -368,9 +388,13 @@ export function useTerminalSession({ cwd, onAddSelectionToChat }: UseTerminalSes
     term.loadAddon(new WebLinksAddon())
     term.unicode.activeVersion = '11'
 
-    // Let the GUI chat agent read this pane via the `read_terminal` tool: the
-    // gateway's terminal.read.request handler serializes the buffer through this.
-    setActiveTerminalReader(makeTerminalReader(term))
+    // Build the agent reader for this tab's buffer; the active-gated effect below
+    // decides when it becomes the globally-visible one.
+    readerRef.current = makeTerminalReader(term)
+
+    if (activeRef.current) {
+      setActiveTerminalReader(readerRef.current)
+    }
 
     const onDragOver = (e: DragEvent) => {
       if (!e.dataTransfer || !transferHasDropCandidates(e.dataTransfer)) {
@@ -500,6 +524,8 @@ export function useTerminalSession({ cwd, onAddSelectionToChat }: UseTerminalSes
       }
     }
 
+    refitRef.current = fitAndResize
+
     // Coalesce ResizeObserver bursts through rAF — running fit.fit()
     // synchronously while sibling panes are mid-transition (e.g. file browser
     // collapsing to 0px) crashes the WebGL renderer mid texture-atlas rebuild.
@@ -557,7 +583,7 @@ export function useTerminalSession({ cwd, onAddSelectionToChat }: UseTerminalSes
 
     const startSession = () =>
       void terminalApi
-        .start({ cols: term.cols, cwd, rows: term.rows })
+        .start({ cols: term.cols, cwd: cwdRef.current, rows: term.rows })
         .then(session => {
           if (disposed) {
             void terminalApi.dispose(session.id)
@@ -587,7 +613,10 @@ export function useTerminalSession({ cwd, onAddSelectionToChat }: UseTerminalSes
           window.requestAnimationFrame(() => {
             fitAndResize()
             term.clearSelection() // drop any selection painted over transient boot rows
-            term.focus()
+
+            if (activeRef.current) {
+              term.focus()
+            }
           })
         })
         .catch(error => {
@@ -605,7 +634,10 @@ export function useTerminalSession({ cwd, onAddSelectionToChat }: UseTerminalSes
       }
 
       term.open(host)
-      term.focus()
+
+      if (activeRef.current) {
+        term.focus()
+      }
 
       // WebGL renderer matches the dashboard ChatPage path; xterm's default DOM
       // renderer paints SGR via CSS classes that visibly mute against our skins.
@@ -638,7 +670,11 @@ export function useTerminalSession({ cwd, onAddSelectionToChat }: UseTerminalSes
     return () => {
       disposed = true
       cleanup.forEach(run => run())
-      setActiveTerminalReader(null)
+
+      if (readerRef.current) {
+        clearActiveTerminalReader(readerRef.current)
+        readerRef.current = null
+      }
 
       const id = sessionIdRef.current
       sessionIdRef.current = null
@@ -650,11 +686,50 @@ export function useTerminalSession({ cwd, onAddSelectionToChat }: UseTerminalSes
       term.dispose()
       termRef.current = null
       webglRef.current = null
+      refitRef.current = null
       shellNameRef.current = 'shell'
       selectionRef.current = ''
       selectionLabelRef.current = ''
     }
-  }, [addSelectionToChat, cwd])
+    // Spawn once per tab mount; cwd is captured via cwdRef so a workspace-cwd
+    // change never respawns a live console (it would kill running processes).
+  }, [addSelectionToChat])
+
+  // Register this tab as the agent-visible reader + take focus while it's the
+  // active tab; hand the reader back when it deactivates (the next active tab's
+  // effect claims it). Keyed on status so it runs once the term + reader exist.
+  useEffect(() => {
+    if (!active || status !== 'open') {
+      return
+    }
+
+    if (readerRef.current) {
+      setActiveTerminalReader(readerRef.current)
+    }
+
+    // A tab that was hidden (another console was active) can come back with a
+    // stale WebGL texture atlas — glyphs render garbled. Re-fit (in case the
+    // pane was resized while hidden), drop the cached atlas, and force a full
+    // repaint so the now-visible buffer is rasterized fresh.
+    const raf = requestAnimationFrame(() => {
+      refitRef.current?.()
+      webglRef.current?.clearTextureAtlas()
+      const term = termRef.current
+
+      if (term) {
+        term.refresh(0, term.rows - 1)
+        term.focus()
+      }
+    })
+
+    return () => {
+      cancelAnimationFrame(raf)
+
+      if (readerRef.current) {
+        clearActiveTerminalReader(readerRef.current)
+      }
+    }
+  }, [active, status])
 
   useEffect(() => {
     const term = termRef.current
@@ -678,11 +753,12 @@ export function useTerminalSession({ cwd, onAddSelectionToChat }: UseTerminalSes
   }, [activeTheme, themeName])
 
   // Flush a queued command (e.g. a provider-disconnect) into the live session.
-  // Only active while open; the subscribe fires immediately, so a command set
+  // Only the active tab while open consumes injections, so a queued command runs
+  // in exactly one console. The subscribe fires immediately, so a command set
   // before this pane mounted runs as soon as the session is ready. Clearing the
   // atom after writing stops a later remount from replaying a stale command.
   useEffect(() => {
-    if (status !== 'open') {
+    if (status !== 'open' || !active) {
       return
     }
 
@@ -697,7 +773,7 @@ export function useTerminalSession({ cwd, onAddSelectionToChat }: UseTerminalSes
       $terminalInjection.set(null)
       termRef.current?.focus()
     })
-  }, [status])
+  }, [active, status])
 
   return {
     addSelectionToChat,
