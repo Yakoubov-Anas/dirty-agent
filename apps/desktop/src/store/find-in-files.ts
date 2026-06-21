@@ -38,7 +38,14 @@ export function saveFindInFilesSession(patch: Partial<FindInFilesSession>) {
   $findInFilesSession.set({ ...$findInFilesSession.get(), ...patch })
 }
 
-export function openFindInFiles(mode: FindInFilesMode = 'find') {
+export function openFindInFiles(mode: FindInFilesMode = 'find', query?: string) {
+  // When opened from a non-empty editor selection, seed it as the query (and
+  // drop stale results) so the dialog prefills with the selected text. Empty
+  // selection keeps the previous session query.
+  if (query) {
+    saveFindInFilesSession({ query, result: null })
+  }
+
   // Always open (never toggle-close): the shortcut should reliably surface the
   // dialog regardless of current state, matching JetBrains. If it's already
   // open we just switch to the requested mode and keep it open.

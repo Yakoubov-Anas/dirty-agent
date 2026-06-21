@@ -23,6 +23,7 @@ import {
 } from '@codemirror/view'
 import { useEffect, useRef } from 'react'
 
+import { clearActiveEditorView, setActiveEditorView } from '@/components/ui/active-editor'
 import { gotoLineExtension, openGotoLine } from '@/components/ui/code-goto-line'
 import { createReactSearchPanel, openReplacePanel } from '@/components/ui/code-search-panel'
 import { cn } from '@/lib/utils'
@@ -247,6 +248,12 @@ export function CodeEditor({
           if (update.docChanged) {
             onChangeRef.current?.(update.state.doc.toString())
           }
+
+          // Track the focused editor so global Find / Find-in-Files can read
+          // its selection to prefill the search query.
+          if (update.focusChanged && update.view.hasFocus) {
+            setActiveEditorView(update.view)
+          }
         })
       ]
     })
@@ -255,6 +262,7 @@ export function CodeEditor({
     viewRef.current = view
 
     return () => {
+      clearActiveEditorView(view)
       view.destroy()
       viewRef.current = null
     }

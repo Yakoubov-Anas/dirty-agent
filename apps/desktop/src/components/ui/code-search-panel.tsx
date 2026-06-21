@@ -33,7 +33,28 @@ let openWithReplace = false
 // checkboxes, buttons) — unlike the @codemirror/search default panel.
 function SearchPanel({ view, initialFocusRef }: SearchPanelProps) {
   const existing = getSearchQuery(view.state)
-  const [search, setSearch] = useState(existing.search)
+
+  // Prefer the editor's current selection as the query (JetBrains/VS Code
+  // behavior): select text, Ctrl+F → it's the search target. Falls back to the
+  // last query when there's no usable selection. Single-line, bounded length.
+  const selectedText = (() => {
+    try {
+      const sel = view.state.selection?.main
+
+      if (!sel || sel.empty || sel.to - sel.from > 500) {
+        return ''
+      }
+
+      const text = view.state.sliceDoc(sel.from, sel.to)
+
+      return text.includes('\n') ? '' : text
+    } catch {
+      return ''
+    }
+  })()
+
+  const initialSearch = selectedText || existing.search
+  const [search, setSearch] = useState(initialSearch)
   const [replace, setReplace] = useState(existing.replace)
   const [caseSensitive, setCaseSensitive] = useState(existing.caseSensitive)
   const [regexp, setRegexp] = useState(existing.regexp)
@@ -108,10 +129,15 @@ function SearchPanel({ view, initialFocusRef }: SearchPanelProps) {
     recount()
   }
 
-  // Recount once on mount in case a query was already active when the panel
-  // opened (repeated Ctrl+F, or opened from an existing selection).
+  // On mount: if we seeded the query from the selection, push it into the
+  // editor's search state so matches highlight immediately; otherwise just
+  // recount in case a query was already active (repeated Ctrl+F).
   useEffect(() => {
-    recount()
+    if (selectedText && selectedText !== existing.search) {
+      commit({ search: selectedText })
+    } else {
+      recount()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

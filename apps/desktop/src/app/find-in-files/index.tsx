@@ -77,6 +77,14 @@ export function FindInFilesDialog() {
   // Focus the query field whenever the dialog opens.
   useEffect(() => {
     if (open) {
+      // The dialog stays mounted (returns null when closed), so useState only
+      // seeds once. Re-read the session query on each open so a freshly seeded
+      // value (e.g. the editor selection from Ctrl+Shift+F) takes effect, and
+      // the last query is restored otherwise.
+      const seeded = $findInFilesSession.get().query
+
+      setQuery(prev => (seeded !== prev ? seeded : prev))
+
       // rAF so the element is mounted before we focus/select.
       requestAnimationFrame(() => {
         searchRef.current?.focus()

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { $terminalTakeover, setTerminalTakeover } from '@/app/right-sidebar/store'
 import { PANE_TOGGLE_REVEAL_EVENT } from '@/components/pane-shell'
+import { getActiveEditorSelectionText } from '@/components/ui/active-editor'
 import { matchesQuery } from '@/hooks/use-media-query'
 import { PROFILE_SLOT_COUNT, SESSION_SLOT_COUNT } from '@/lib/keybinds/actions'
 import { comboAllowedInInput, comboFromEvent, isEditableTarget } from '@/lib/keybinds/combo'
@@ -126,8 +127,8 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
     'nav.cron': () => navigate(CRON_ROUTE),
     'nav.agents': () => navigate(AGENTS_ROUTE),
 
-    'find.inFiles': () => openFindInFiles('find'),
-    'find.replaceInFiles': () => openFindInFiles('replace'),
+    'find.inFiles': () => openFindInFiles('find', getActiveEditorSelectionText()),
+    'find.replaceInFiles': () => openFindInFiles('replace', getActiveEditorSelectionText()),
 
     'session.new': () => {
       // Match the sidebar New Session button. A plain keyboard new chat should
