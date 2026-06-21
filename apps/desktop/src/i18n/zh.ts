@@ -163,6 +163,9 @@ export const zh: Translations = {
     gitLog: '日志',
     moveToLeft: '移到左侧',
     moveToRight: '移到右侧',
+    moveToTop: '移到顶部',
+    moveToBottom: '移到底部',
+    exclusiveOpen: '每侧只打开一个面板',
     newConsole: '新建控制台',
     closeConsole: '关闭控制台'
   },
@@ -207,6 +210,8 @@ export const zh: Translations = {
     diffWorkingTreeTitle: name => `工作树 ↔ ${name}`,
     logAria: 'Git 日志',
     logTitle: '日志',
+    head: 'HEAD',
+    headCurrent: name => `HEAD (${name})`,
     noCommits: '没有提交。',
     loadMore: '加载更多',
     changedFiles: count => `${count} 个文件已更改`,

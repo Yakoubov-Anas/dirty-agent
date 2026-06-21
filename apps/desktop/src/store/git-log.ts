@@ -17,6 +17,9 @@ export const $gitLogSelectedHash = atom<null | string>(null)
 export const $gitLogDetail = atom<HermesGitCommitDetail | null>(null)
 export const $gitLogDetailLoading = atom(false)
 export const $gitLogDiff = atom<string>('')
+// Active branch filter for the log. null = current HEAD; 'all' = every branch;
+// otherwise a specific branch/ref name.
+export const $gitLogBranch = atom<null | string>(null)
 
 let logToken = 0
 
@@ -35,7 +38,8 @@ export async function refreshGitLog() {
   $gitLogLoading.set(true)
   $gitLogError.set(null)
 
-  const result = await gitLog(repoRoot, { limit: PAGE_SIZE, skip: 0 })
+  const branch = $gitLogBranch.get() ?? undefined
+  const result = await gitLog(repoRoot, { branch, limit: PAGE_SIZE, skip: 0 })
 
   if (token !== logToken) {
     return
@@ -72,7 +76,8 @@ export async function loadMoreGitLog() {
   const token = logToken
   $gitLogLoadingMore.set(true)
 
-  const result = await gitLog(repoRoot, { limit: PAGE_SIZE, skip: $gitLogCommits.get().length })
+  const branch = $gitLogBranch.get() ?? undefined
+  const result = await gitLog(repoRoot, { branch, limit: PAGE_SIZE, skip: $gitLogCommits.get().length })
 
   // A full refresh started while paging — discard this stale page.
   if (token !== logToken) {
@@ -95,6 +100,17 @@ export async function loadMoreGitLog() {
 }
 
 let detailToken = 0
+
+// Switch the branch filter and reload the log. null = HEAD, 'all' = all branches.
+export async function setGitLogBranch(branch: null | string) {
+  if ($gitLogBranch.get() === branch) {
+    return
+  }
+
+  $gitLogBranch.set(branch)
+  clearGitLogSelection()
+  await refreshGitLog()
+}
 
 export function clearGitLogSelection() {
   $gitLogSelectedHash.set(null)

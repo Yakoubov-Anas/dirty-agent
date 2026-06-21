@@ -180,6 +180,9 @@ export interface Translations {
     gitLog: string
     moveToLeft: string
     moveToRight: string
+    moveToTop: string
+    moveToBottom: string
+    exclusiveOpen: string
     newConsole: string
     closeConsole: string
   }
@@ -224,6 +227,8 @@ export interface Translations {
     diffWorkingTreeTitle: (name: string) => string
     logAria: string
     logTitle: string
+    head: string
+    headCurrent: (name: string) => string
     noCommits: string
     loadMore: string
     changedFiles: (count: string) => string

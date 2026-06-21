@@ -167,6 +167,9 @@ export const ja = defineLocale({
     gitLog: 'ログ',
     moveToLeft: '左へ移動',
     moveToRight: '右へ移動',
+    moveToTop: '上へ移動',
+    moveToBottom: '下へ移動',
+    exclusiveOpen: '各サイドで1つのパネルのみ開く',
     newConsole: '新しいコンソール',
     closeConsole: 'コンソールを閉じる'
   },
@@ -211,6 +214,8 @@ export const ja = defineLocale({
     diffWorkingTreeTitle: name => `ワーキングツリー ↔ ${name}`,
     logAria: 'Git ログ',
     logTitle: 'ログ',
+    head: 'HEAD',
+    headCurrent: name => `HEAD (${name})`,
     noCommits: 'コミットがありません。',
     loadMore: 'さらに読み込む',
     changedFiles: count => `${count} 件のファイル変更`,

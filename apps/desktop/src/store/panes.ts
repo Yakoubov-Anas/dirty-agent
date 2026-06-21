@@ -79,6 +79,16 @@ export const $paneStates = atom<Record<string, PaneStateSnapshot>>(load())
 
 $paneStates.subscribe(persist)
 
+// Monotonic "opened at" sequence per pane, bumped each time a pane transitions
+// closed → open. Lets the layout order columns within a group by the order the
+// user opened them (not a fixed rank). In-memory only — resets each session.
+let openSeqCounter = 0
+export const $paneOpenSeq = atom<Record<string, number>>({})
+
+function markOpened(id: string) {
+  $paneOpenSeq.set({ ...$paneOpenSeq.get(), [id]: ++openSeqCounter })
+}
+
 // Cached per-pane derived atoms keep useStore subscriptions referentially stable.
 function memoized<T>(
   cache: Map<string, ReadableAtom<T>>,
@@ -121,13 +131,23 @@ export function setPaneOpen(id: string, open: boolean) {
     return
   }
 
+  if (open) {
+    markOpened(id)
+  }
+
   $paneStates.set({ ...current, [id]: { open, widthOverride: existing?.widthOverride } })
 }
 
 export function togglePane(id: string) {
   const current = $paneStates.get()
   const existing = current[id]
-  $paneStates.set({ ...current, [id]: { open: !(existing?.open ?? false), widthOverride: existing?.widthOverride } })
+  const open = !(existing?.open ?? false)
+
+  if (open) {
+    markOpened(id)
+  }
+
+  $paneStates.set({ ...current, [id]: { open, widthOverride: existing?.widthOverride } })
 }
 
 export function setPaneWidthOverride(id: string, width: number | undefined) {

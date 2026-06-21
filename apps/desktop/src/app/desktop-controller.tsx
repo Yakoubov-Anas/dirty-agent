@@ -9,6 +9,8 @@ import { DesktopOnboardingOverlay } from '@/components/desktop-onboarding-overla
 import { GatewayConnectingOverlay } from '@/components/gateway-connecting-overlay'
 import { Pane, PaneMain } from '@/components/pane-shell'
 import { useMediaQuery } from '@/hooks/use-media-query'
+import { useI18n } from '@/i18n'
+import { $paneOpenSeq } from '@/store/panes'
 import { useSkinCommand } from '@/themes/use-skin-command'
 
 import { formatRefValue } from '../components/assistant-ui/directive-text'
@@ -86,7 +88,7 @@ import {
 } from '../store/session'
 import { onSessionsChanged } from '../store/session-sync'
 import { clearSessionTodos, setSessionTodos, todoListActive } from '../store/todos'
-import { $toolWindowSide } from '../store/tool-windows'
+import { $toolWindowSegment, $toolWindowSide } from '../store/tool-windows'
 import { openUpdatesWindow, startUpdatePoller, stopUpdatePoller } from '../store/updates'
 import { isSecondaryWindow } from '../store/windows'
 
@@ -130,6 +132,7 @@ import { useRouteResume } from './session/hooks/use-route-resume'
 import { useSessionActions } from './session/hooks/use-session-actions'
 import { useSessionStateCache } from './session/hooks/use-session-state-cache'
 import { AppShell } from './shell/app-shell'
+import { BottomDock, type BottomPanel } from './shell/bottom-dock'
 import { useOverlayRouting } from './shell/hooks/use-overlay-routing'
 import { useStatusSnapshot } from './shell/hooks/use-status-snapshot'
 import { useStatusbarItems } from './shell/hooks/use-statusbar-items'
@@ -204,6 +207,7 @@ export function DesktopController() {
   const queryClient = useQueryClient()
   const location = useLocation()
   const navigate = useNavigate()
+  const { t } = useI18n()
 
   const busyRef = useRef(false)
   const creatingSessionRef = useRef(false)
@@ -226,6 +230,14 @@ export function DesktopController() {
   const terminalSide = useStore($toolWindowSide(TERMINAL_PANE_ID))
   const gitSide = useStore($toolWindowSide(GIT_COMMIT_PANE_ID))
   const gitLogSide = useStore($toolWindowSide(GIT_LOG_PANE_ID))
+  // Segments decide dock vs side-column placement for each relocatable panel.
+  const sidebarSegment = useStore($toolWindowSegment(CHAT_SIDEBAR_PANE_ID))
+  const railSegment = useStore($toolWindowSegment(FILE_BROWSER_PANE_ID))
+  const terminalSegment = useStore($toolWindowSegment(TERMINAL_PANE_ID))
+  const gitSegment = useStore($toolWindowSegment(GIT_COMMIT_PANE_ID))
+  const gitLogSegment = useStore($toolWindowSegment(GIT_LOG_PANE_ID))
+  // Open-sequence per pane → column order within a side (recent = near editor).
+  const paneOpenSeq = useStore($paneOpenSeq)
   const profileScope = useStore($profileScope)
   // Below SIDEBAR_COLLAPSE_BREAKPOINT_PX there's no room for a docked rail —
   // collapse both sidebars (without touching their stored open state) so the
@@ -1102,116 +1114,174 @@ export function DesktopController() {
     </Pane>
   )
 
-  const fileBrowserPane = (
-    <Pane
-      defaultOpen={false}
-      disabled={!chatOpen}
-      forceCollapsed={narrowViewport}
-      hoverReveal
-      id="file-browser"
-      key="file-browser"
-      maxWidth={FILE_BROWSER_MAX_WIDTH}
-      minWidth={FILE_BROWSER_MIN_WIDTH}
-      resizable
-      side={railSide}
-      width={FILE_BROWSER_DEFAULT_WIDTH}
-    >
-      <RightSidebarPane
-        onActivateFile={path => composer.insertContextPathInlineRef(path)}
-        onActivateFolder={path => composer.insertContextPathInlineRef(path, true)}
-        onChangeCwd={changeSessionCwd}
-      />
-    </Pane>
+  // Content for each relocatable tool window. Rendered either as a side-docked
+  // <Pane> (segment 'top') or inside the bottom dock (segment 'bottom').
+  const fileBrowserContent = (
+    <RightSidebarPane
+      onActivateFile={path => composer.insertContextPathInlineRef(path)}
+      onActivateFolder={path => composer.insertContextPathInlineRef(path, true)}
+      onChangeCwd={changeSessionCwd}
+    />
   )
 
-  const terminalPane = (
-    <Pane
-      defaultOpen={false}
-      disabled={!chatOpen}
-      divider
-      id={TERMINAL_PANE_ID}
-      key={TERMINAL_PANE_ID}
-      maxWidth="80vw"
-      minWidth="22vw"
-      resizable
-      side={terminalSide}
-      width="42vw"
-    >
-      <div className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-(--ui-sidebar-surface-background) pt-(--pane-header-reserve)">
-        <TerminalTabsBar />
-        <TerminalSlot />
-      </div>
-    </Pane>
+  const terminalContent = (
+    <div className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-(--ui-sidebar-surface-background) pt-(--pane-header-reserve)">
+      <TerminalTabsBar />
+      <TerminalSlot />
+    </div>
   )
 
-  const chatSidebarPane = !isSecondaryWindow() ? (
-    <Pane
-      forceCollapsed={narrowViewport}
-      hoverReveal
-      id="chat-sidebar"
-      key="chat-sidebar"
-      maxWidth={SIDEBAR_MAX_WIDTH}
-      minWidth={SIDEBAR_DEFAULT_WIDTH}
-      onOverlayActiveChange={setSidebarOverlayMounted}
-      resizable
-      side={sidebarSide}
-      width={`${SIDEBAR_DEFAULT_WIDTH}px`}
-    >
-      {sidebar}
-    </Pane>
-  ) : null
+  const gitCommitContent = <GitCommitPane />
+  const gitLogContent = <GitLogPane />
 
-  const gitCommitPane = !isSecondaryWindow() ? (
-    <Pane
-      defaultOpen={false}
-      disabled={!chatOpen}
-      id={GIT_COMMIT_PANE_ID}
-      key={GIT_COMMIT_PANE_ID}
-      maxWidth={SIDEBAR_MAX_WIDTH}
-      minWidth={SIDEBAR_DEFAULT_WIDTH}
-      resizable
-      side={gitSide}
-      width={`${SIDEBAR_DEFAULT_WIDTH}px`}
-    >
-      <GitCommitPane />
-    </Pane>
-  ) : null
+  const fileBrowserPane =
+    railSegment === 'top' ? (
+      <Pane
+        defaultOpen={false}
+        disabled={!chatOpen}
+        forceCollapsed={narrowViewport}
+        hoverReveal
+        id="file-browser"
+        key="file-browser"
+        maxWidth={FILE_BROWSER_MAX_WIDTH}
+        minWidth={FILE_BROWSER_MIN_WIDTH}
+        resizable
+        side={railSide}
+        width={FILE_BROWSER_DEFAULT_WIDTH}
+      >
+        {fileBrowserContent}
+      </Pane>
+    ) : null
 
-  const gitLogPane = !isSecondaryWindow() ? (
-    <Pane
-      defaultOpen={false}
-      disabled={!chatOpen}
-      id={GIT_LOG_PANE_ID}
-      key={GIT_LOG_PANE_ID}
-      maxWidth="38rem"
-      minWidth="20rem"
-      resizable
-      side={gitLogSide}
-      width="24rem"
-    >
-      <GitLogPane />
-    </Pane>
-  ) : null
+  const terminalPane =
+    terminalSegment === 'top' ? (
+      <Pane
+        defaultOpen={false}
+        disabled={!chatOpen}
+        divider
+        id={TERMINAL_PANE_ID}
+        key={TERMINAL_PANE_ID}
+        maxWidth="80vw"
+        minWidth="22vw"
+        resizable
+        side={terminalSide}
+        width="42vw"
+      >
+        {terminalContent}
+      </Pane>
+    ) : null
+
+  const chatSidebarPane =
+    !isSecondaryWindow() && sidebarSegment === 'top' ? (
+      <Pane
+        forceCollapsed={narrowViewport}
+        hoverReveal
+        id="chat-sidebar"
+        key="chat-sidebar"
+        maxWidth={SIDEBAR_MAX_WIDTH}
+        minWidth={SIDEBAR_DEFAULT_WIDTH}
+        onOverlayActiveChange={setSidebarOverlayMounted}
+        resizable
+        side={sidebarSide}
+        width={`${SIDEBAR_DEFAULT_WIDTH}px`}
+      >
+        {sidebar}
+      </Pane>
+    ) : null
+
+  const gitCommitPane =
+    !isSecondaryWindow() && gitSegment === 'top' ? (
+      <Pane
+        defaultOpen={false}
+        disabled={!chatOpen}
+        id={GIT_COMMIT_PANE_ID}
+        key={GIT_COMMIT_PANE_ID}
+        maxWidth={SIDEBAR_MAX_WIDTH}
+        minWidth={SIDEBAR_DEFAULT_WIDTH}
+        resizable
+        side={gitSide}
+        width={`${SIDEBAR_DEFAULT_WIDTH}px`}
+      >
+        {gitCommitContent}
+      </Pane>
+    ) : null
+
+  const gitLogPane =
+    !isSecondaryWindow() && gitLogSegment === 'top' ? (
+      <Pane
+        defaultOpen={false}
+        disabled={!chatOpen}
+        id={GIT_LOG_PANE_ID}
+        key={GIT_LOG_PANE_ID}
+        maxWidth="38rem"
+        minWidth="20rem"
+        resizable
+        side={gitLogSide}
+        width="24rem"
+      >
+        {gitLogContent}
+      </Pane>
+    ) : null
 
   // Tool windows dock by side; order within a side runs from the window edge
-  // inward to main. Rank = distance from main (0 = innermost). On the left, the
-  // window edge is the first column, so emit high→low rank; on the right the
-  // window edge is the last column, so emit low→high. The preview rail isn't a
-  // tool window — it shadows the file browser's side.
+  // inward to main. Rank = distance from main. We derive it from the open
+  // SEQUENCE so the most-recently-opened panel sits closest to the editor
+  // (negate the seq: a higher seq → more negative → smaller distance). The
+  // preview rail isn't a tool window — it shadows the file browser, pinned just
+  // inside it.
+  const rankFor = (id: string) => -(paneOpenSeq[id] ?? 0)
+
   const railPanes: { node: ReactNode; rank: number; side: 'left' | 'right' }[] = [
-    { node: chatSidebarPane, rank: 5, side: sidebarSide },
-    { node: gitCommitPane, rank: 4, side: gitSide },
-    { node: gitLogPane, rank: 3, side: gitLogSide },
-    { node: fileBrowserPane, rank: 2, side: railSide },
-    { node: previewPane, rank: 1, side: railSide },
-    { node: terminalPane, rank: 0, side: terminalSide }
+    { node: chatSidebarPane, rank: rankFor(CHAT_SIDEBAR_PANE_ID), side: sidebarSide },
+    { node: gitCommitPane, rank: rankFor(GIT_COMMIT_PANE_ID), side: gitSide },
+    { node: gitLogPane, rank: rankFor(GIT_LOG_PANE_ID), side: gitLogSide },
+    { node: fileBrowserPane, rank: rankFor(FILE_BROWSER_PANE_ID), side: railSide },
+    { node: previewPane, rank: rankFor(FILE_BROWSER_PANE_ID) - 0.5, side: railSide },
+    { node: terminalPane, rank: rankFor(TERMINAL_PANE_ID), side: terminalSide }
   ].filter(pane => pane.node !== null)
 
   const leftRailPanes = railPanes.filter(pane => pane.side === 'left').sort((a, b) => b.rank - a.rank)
   const rightRailPanes = railPanes.filter(pane => pane.side === 'right').sort((a, b) => a.rank - b.rank)
 
+  // Bottom-dock panels (segment 'bottom'). Secondary windows have no dock.
+  const bottomPanels: BottomPanel[] = isSecondaryWindow()
+    ? []
+    : ([
+        sidebarSegment === 'bottom' && {
+          content: sidebar,
+          id: CHAT_SIDEBAR_PANE_ID,
+          label: t.toolWindows.agent,
+          side: sidebarSide
+        },
+        gitSegment === 'bottom' && {
+          content: gitCommitContent,
+          id: GIT_COMMIT_PANE_ID,
+          label: t.toolWindows.git,
+          side: gitSide
+        },
+        gitLogSegment === 'bottom' && {
+          content: gitLogContent,
+          id: GIT_LOG_PANE_ID,
+          label: t.toolWindows.gitLog,
+          side: gitLogSide
+        },
+        railSegment === 'bottom' && {
+          content: fileBrowserContent,
+          id: FILE_BROWSER_PANE_ID,
+          label: t.toolWindows.files,
+          side: railSide
+        },
+        terminalSegment === 'bottom' && {
+          content: terminalContent,
+          id: TERMINAL_PANE_ID,
+          label: t.toolWindows.terminal,
+          side: terminalSide
+        }
+      ].filter(Boolean) as BottomPanel[])
+
   return (
     <AppShell
+      bottomDock={<BottomDock panels={bottomPanels} />}
       leftStatusbarItems={leftStatusbarItems}
       leftTitlebarTools={titlebarToolGroups.flat.left}
       mainOverlays={mainOverlays}

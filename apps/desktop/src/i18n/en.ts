@@ -167,6 +167,9 @@ export const en: Translations = {
     gitLog: 'Log',
     moveToLeft: 'Move to left',
     moveToRight: 'Move to right',
+    moveToTop: 'Move to top',
+    moveToBottom: 'Move to bottom',
+    exclusiveOpen: 'Open one panel per side',
     newConsole: 'New console',
     closeConsole: 'Close console'
   },
@@ -211,6 +214,8 @@ export const en: Translations = {
     diffWorkingTreeTitle: name => `Working tree ↔ ${name}`,
     logAria: 'Git log',
     logTitle: 'Log',
+    head: 'HEAD',
+    headCurrent: name => `HEAD (${name})`,
     noCommits: 'No commits.',
     loadMore: 'Load more',
     changedFiles: count => `${count} files changed`,

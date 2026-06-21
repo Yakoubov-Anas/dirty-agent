@@ -26,6 +26,7 @@ import {
   $gitLogLoading,
   $gitLogLoadingMore,
   $gitLogSelectedHash,
+  clearGitLogSelection,
   loadMoreGitLog,
   refreshGitLog,
   selectGitLogCommit
@@ -34,6 +35,8 @@ import { GIT_LOG_PANE_ID } from '@/store/layout'
 import { $toolWindowSide } from '@/store/tool-windows'
 
 import { SidebarPanelLabel } from '../shell/sidebar-label'
+
+import { LogBranchTree } from './log-branch-tree'
 
 const RELATIVE = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto', style: 'short' })
 
@@ -117,7 +120,7 @@ export function GitLogPane() {
     <aside
       aria-label={g.logAria}
       className={cn(
-        'relative flex h-full w-full min-w-0 flex-col overflow-hidden border-(--ui-stroke-secondary) bg-(--ui-sidebar-surface-background) pt-(--pane-header-reserve) text-(--ui-text-tertiary)',
+        '@container relative flex h-full w-full min-w-0 flex-col overflow-hidden border-(--ui-stroke-secondary) bg-(--ui-sidebar-surface-background) pt-(--pane-header-reserve) text-(--ui-text-tertiary)',
         side === 'left' ? 'border-r' : 'border-l'
       )}
     >
@@ -155,33 +158,41 @@ export function GitLogPane() {
       )}
 
       {!notARepo && (
-        <div className="flex min-h-0 flex-1 flex-col">
-          {/* Commit list (virtualized) */}
-          <div className="flex min-h-0 flex-[2] flex-col">
-            {loading && commits.length === 0 ? (
-              <div className="grid place-items-center py-8">
-                <Loader className="size-6 text-(--ui-text-tertiary)" type="spiral-search" />
-              </div>
-            ) : commits.length === 0 ? (
-              <div className="px-2 py-4 text-center text-xs text-(--ui-text-tertiary)">{g.noCommits}</div>
-            ) : (
-              <CommitList
-                commits={commits}
-                graphRows={graphRows}
-                hasMore={hasMore}
-                loadingMore={loadingMore}
-                maxGraphWidth={maxGraphWidth}
-                selectedHash={selectedHash}
-              />
-            )}
+        <div className="flex min-h-0 flex-1">
+          {/* Branch tree — only when the pane is wide enough (JetBrains shows it
+              in the bottom dock / dragged-wide layout, hides it in a narrow rail). */}
+          <div className="hidden @2xl:flex">
+            <LogBranchTree />
           </div>
 
-          {/* Detail of the selected commit */}
-          {selectedHash && (
-            <div className="flex min-h-0 flex-[3] flex-col border-t border-(--ui-stroke-tertiary)">
-              <CommitDetail />
+          <div className="flex min-h-0 flex-1 flex-col">
+            {/* Commit list (virtualized) */}
+            <div className="flex min-h-0 flex-[2] flex-col">
+              {loading && commits.length === 0 ? (
+                <div className="grid place-items-center py-8">
+                  <Loader className="size-6 text-(--ui-text-tertiary)" type="spiral-search" />
+                </div>
+              ) : commits.length === 0 ? (
+                <div className="px-2 py-4 text-center text-xs text-(--ui-text-tertiary)">{g.noCommits}</div>
+              ) : (
+                <CommitList
+                  commits={commits}
+                  graphRows={graphRows}
+                  hasMore={hasMore}
+                  loadingMore={loadingMore}
+                  maxGraphWidth={maxGraphWidth}
+                  selectedHash={selectedHash}
+                />
+              )}
             </div>
-          )}
+
+            {/* Detail of the selected commit */}
+            {selectedHash && (
+              <div className="flex min-h-0 flex-[3] flex-col border-t border-(--ui-stroke-tertiary)">
+                <CommitDetail />
+              </div>
+            )}
+          </div>
         </div>
       )}
     </aside>
@@ -338,6 +349,16 @@ function CommitDetail() {
         <div className="flex items-start gap-2">
           <p className="min-w-0 flex-1 text-xs font-medium text-foreground">{detail.subject}</p>
           <CopyButton appearance="icon" className="size-5 shrink-0" text={detail.hash} />
+          <Button
+            aria-label={t.common.close}
+            className="size-5 shrink-0 rounded text-(--ui-text-tertiary)!"
+            onClick={() => clearGitLogSelection()}
+            size="icon"
+            type="button"
+            variant="ghost"
+          >
+            <Codicon name="close" size="0.8rem" />
+          </Button>
         </div>
         {detail.body && (
           <pre className="mt-1.5 font-sans text-[0.7rem] whitespace-pre-wrap text-(--ui-text-secondary)">

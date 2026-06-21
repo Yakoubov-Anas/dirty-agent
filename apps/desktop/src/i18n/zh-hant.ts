@@ -162,6 +162,9 @@ export const zhHant = defineLocale({
     gitLog: '記錄',
     moveToLeft: '移到左側',
     moveToRight: '移到右側',
+    moveToTop: '移到頂部',
+    moveToBottom: '移到底部',
+    exclusiveOpen: '每側只開啟一個面板',
     newConsole: '新增主控台',
     closeConsole: '關閉主控台'
   },
@@ -206,6 +209,8 @@ export const zhHant = defineLocale({
     diffWorkingTreeTitle: name => `工作樹 ↔ ${name}`,
     logAria: 'Git 記錄',
     logTitle: '記錄',
+    head: 'HEAD',
+    headCurrent: name => `HEAD (${name})`,
     noCommits: '沒有提交。',
     loadMore: '載入更多',
     changedFiles: count => `${count} 個檔案已變更`,

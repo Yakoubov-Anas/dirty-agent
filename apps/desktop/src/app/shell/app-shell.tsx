@@ -31,6 +31,9 @@ import { TitlebarControls, type TitlebarTool } from './titlebar-controls'
 import { ToolStripe } from './tool-stripe'
 
 interface AppShellProps {
+  // JetBrains-style bottom dock: bottom-segment tool windows render here, below
+  // the panes and between the stripes. Built by the controller and placed here.
+  bottomDock?: ReactNode
   children: ReactNode
   leftStatusbarItems?: readonly StatusbarItem[]
   leftTitlebarTools?: readonly TitlebarTool[]
@@ -67,6 +70,7 @@ const viewportIsFullscreen = () =>
 
 export function AppShell({
   children,
+  bottomDock,
   leftStatusbarItems,
   leftTitlebarTools,
   mainOverlays,
@@ -230,25 +234,31 @@ export function AppShell({
               Secondary windows are compact and carry no stripes. */}
           {!hideTitlebarControls && <ToolStripe side="left" />}
 
-          <PaneShell className="min-h-0 flex-1">
-            {/* Secondary windows have no header bar, so the titlebar zone lives at
-                the top of the panes — keep it draggable there. Normal windows drag
-                from the dedicated header bar instead. */}
-            {hideTitlebarControls && (
-              <>
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute left-0 top-0 z-1 h-(--titlebar-height) w-(--titlebar-controls-left) [-webkit-app-region:drag]"
-                />
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute top-0 z-1 h-(--titlebar-height) left-[calc(var(--titlebar-controls-left)+(var(--titlebar-control-size)*2)+0.75rem)] right-[calc(var(--titlebar-tools-right)+var(--titlebar-tools-width)+0.75rem)] [-webkit-app-region:drag]"
-                />
-              </>
-            )}
+          {/* Center column: panes on top, bottom dock below (between stripes). */}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <PaneShell className="min-h-0 flex-1">
+              {/* Secondary windows have no header bar, so the titlebar zone lives at
+                  the top of the panes — keep it draggable there. Normal windows drag
+                  from the dedicated header bar instead. */}
+              {hideTitlebarControls && (
+                <>
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute left-0 top-0 z-1 h-(--titlebar-height) w-(--titlebar-controls-left) [-webkit-app-region:drag]"
+                  />
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute top-0 z-1 h-(--titlebar-height) left-[calc(var(--titlebar-controls-left)+(var(--titlebar-control-size)*2)+0.75rem)] right-[calc(var(--titlebar-tools-right)+var(--titlebar-tools-width)+0.75rem)] [-webkit-app-region:drag]"
+                  />
+                </>
+              )}
 
-            {children}
-          </PaneShell>
+              {children}
+            </PaneShell>
+
+            {/* Bottom dock (resizable). Renders null when no bottom panel open. */}
+            {bottomDock}
+          </div>
 
           {/* Right tool-window stripe. */}
           {!hideTitlebarControls && <ToolStripe side="right" />}
