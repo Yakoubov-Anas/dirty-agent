@@ -15,9 +15,11 @@ interface DiffViewerProps {
   diff: string
   // Pre-parsed files (skip parsing when the caller already has them).
   files?: DiffFile[]
+  // Start every file section collapsed (e.g. commit detail with many files).
+  defaultCollapsed?: boolean
 }
 
-export function DiffViewer({ className, diff, files }: DiffViewerProps) {
+export function DiffViewer({ className, defaultCollapsed = false, diff, files }: DiffViewerProps) {
   const { t } = useI18n()
   const parsed = useMemo(() => files ?? parseUnifiedDiff(diff), [diff, files])
 
@@ -28,15 +30,19 @@ export function DiffViewer({ className, diff, files }: DiffViewerProps) {
   return (
     <div className={cn('flex min-h-0 flex-col gap-2', className)}>
       {parsed.map(file => (
-        <DiffFileSection file={file} key={`${file.oldPath ?? ''}→${file.path}`} />
+        <DiffFileSection
+          defaultCollapsed={defaultCollapsed}
+          file={file}
+          key={`${file.oldPath ?? ''}→${file.path}`}
+        />
       ))}
     </div>
   )
 }
 
-function DiffFileSection({ file }: { file: DiffFile }) {
+function DiffFileSection({ defaultCollapsed, file }: { defaultCollapsed: boolean; file: DiffFile }) {
   const { t } = useI18n()
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(!defaultCollapsed)
   const renamed = file.oldPath && file.oldPath !== file.path
 
   return (

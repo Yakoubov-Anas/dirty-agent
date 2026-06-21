@@ -1,7 +1,10 @@
 import type {
   HermesGitBranchesResult,
+  HermesGitCommitDetailResult,
   HermesGitCommitResult,
   HermesGitDiffResult,
+  HermesGitLogOptions,
+  HermesGitLogResult,
   HermesGitMutationResult,
   HermesGitStatusResult
 } from '@/global'
@@ -199,4 +202,34 @@ export async function gitPush(repoRoot: string): Promise<HermesGitCommitResult> 
   }
 
   return git.push(repoRoot)
+}
+
+export async function gitLog(repoRoot: string, options?: HermesGitLogOptions): Promise<HermesGitLogResult> {
+  const git = window.hermesDesktop?.git
+
+  if (!git) {
+    return { error: NO_BRIDGE, ok: false }
+  }
+
+  return git.log(repoRoot, options)
+}
+
+export async function gitCommitDetail(repoRoot: string, hash: string): Promise<HermesGitCommitDetailResult> {
+  const git = window.hermesDesktop?.git
+
+  if (!git) {
+    return { error: NO_BRIDGE, ok: false }
+  }
+
+  return git.commitDetail(repoRoot, hash)
+}
+
+export async function gitCommitDiff(repoRoot: string, hash: string): Promise<HermesGitDiffResult> {
+  const git = window.hermesDesktop?.git
+
+  if (!git) {
+    return { error: NO_BRIDGE, ok: false }
+  }
+
+  return git.commitDiff(repoRoot, hash)
 }

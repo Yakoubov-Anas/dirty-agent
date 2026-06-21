@@ -104,6 +104,9 @@ declare global {
         rebase: (repoRoot: string, branch: string) => Promise<HermesGitCommitResult>
         diffWorkingTree: (repoRoot: string, ref: string) => Promise<HermesGitDiffResult>
         compareBranches: (repoRoot: string, base: string, target: string) => Promise<HermesGitDiffResult>
+        log: (repoRoot: string, options?: HermesGitLogOptions) => Promise<HermesGitLogResult>
+        commitDetail: (repoRoot: string, hash: string) => Promise<HermesGitCommitDetailResult>
+        commitDiff: (repoRoot: string, hash: string) => Promise<HermesGitDiffResult>
         pull: (repoRoot: string) => Promise<HermesGitCommitResult>
         push: (repoRoot: string) => Promise<HermesGitCommitResult>
       }
@@ -535,6 +538,57 @@ export interface HermesGitBranch {
 
 export type HermesGitBranchesResult =
   | { ok: true; local: HermesGitBranch[]; remote: HermesGitBranch[] }
+  | { ok: false; error: string }
+
+export interface HermesGitLogOptions {
+  limit?: number
+  skip?: number
+  branch?: string
+  author?: string
+  query?: string
+  path?: string
+}
+
+export interface HermesGitRef {
+  name: string
+  kind: 'current' | 'head' | 'local' | 'remote' | 'tag'
+}
+
+export interface HermesGitLogCommit {
+  hash: string
+  parents: string[]
+  author: string
+  email: string
+  date: string
+  subject: string
+  refs: HermesGitRef[]
+}
+
+export type HermesGitLogResult =
+  | { ok: true; commits: HermesGitLogCommit[]; hasMore: boolean }
+  | { ok: false; error: string }
+
+export interface HermesGitCommitFile {
+  path: string
+  origPath: null | string
+  status: string
+}
+
+export interface HermesGitCommitDetail {
+  hash: string
+  parents: string[]
+  author: string
+  email: string
+  authorDate: string
+  committer: string
+  committerDate: string
+  subject: string
+  body: string
+  files: HermesGitCommitFile[]
+}
+
+export type HermesGitCommitDetailResult =
+  | { ok: true; commit: HermesGitCommitDetail }
   | { ok: false; error: string }
 
 

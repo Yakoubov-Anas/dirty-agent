@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
 
 import { refreshGitStatus } from '@/store/git'
+import { refreshGitLog } from '@/store/git-log'
 
 // Resolve the active workspace cwd to a git repo root and load status into the
-// shared git store. Mounted once at a high level so the branch widget + Commit
-// tool window both read fresh status regardless of which (if any) is open.
+// shared git store. Mounted once at a high level so the branch widget + Commit +
+// Log tool windows all read fresh status regardless of which (if any) is open.
 export function useGitStatusWatch(cwd: string) {
   useEffect(() => {
     let cancelled = false
@@ -21,7 +22,10 @@ export function useGitStatusWatch(cwd: string) {
       const root = (await window.hermesDesktop?.gitRoot?.(trimmed)) ?? null
 
       if (!cancelled) {
+        // Status sets $gitRepoRoot, which the log store reads — load the log
+        // right after so the Log panel is populated when opened.
         await refreshGitStatus(root)
+        await refreshGitLog()
       }
     }
 

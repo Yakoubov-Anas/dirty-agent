@@ -32,6 +32,7 @@ import {
   FILE_BROWSER_MIN_WIDTH,
   FILE_BROWSER_PANE_ID,
   GIT_COMMIT_PANE_ID,
+  GIT_LOG_PANE_ID,
   pinSession,
   setSidebarOverlayMounted,
   SIDEBAR_DEFAULT_WIDTH,
@@ -104,6 +105,7 @@ import { FindInFilesDialog } from './find-in-files'
 import { useGatewayBoot } from './gateway/hooks/use-gateway-boot'
 import { useGatewayRequest } from './gateway/hooks/use-gateway-request'
 import { GitCommitPane } from './git/commit-pane'
+import { GitLogPane } from './git/log-pane'
 import { useGitStatusWatch } from './git/use-git-status-watch'
 import { GoToFileDialog } from './go-to-file'
 import { useKeybinds } from './hooks/use-keybinds'
@@ -223,6 +225,7 @@ export function DesktopController() {
   const railSide = useStore($toolWindowSide(FILE_BROWSER_PANE_ID))
   const terminalSide = useStore($toolWindowSide(TERMINAL_PANE_ID))
   const gitSide = useStore($toolWindowSide(GIT_COMMIT_PANE_ID))
+  const gitLogSide = useStore($toolWindowSide(GIT_LOG_PANE_ID))
   const profileScope = useStore($profileScope)
   // Below SIDEBAR_COLLAPSE_BREAKPOINT_PX there's no room for a docked rail —
   // collapse both sidebars (without touching their stored open state) so the
@@ -1174,14 +1177,31 @@ export function DesktopController() {
     </Pane>
   ) : null
 
+  const gitLogPane = !isSecondaryWindow() ? (
+    <Pane
+      defaultOpen={false}
+      disabled={!chatOpen}
+      id={GIT_LOG_PANE_ID}
+      key={GIT_LOG_PANE_ID}
+      maxWidth="38rem"
+      minWidth="20rem"
+      resizable
+      side={gitLogSide}
+      width="24rem"
+    >
+      <GitLogPane />
+    </Pane>
+  ) : null
+
   // Tool windows dock by side; order within a side runs from the window edge
   // inward to main. Rank = distance from main (0 = innermost). On the left, the
   // window edge is the first column, so emit high→low rank; on the right the
   // window edge is the last column, so emit low→high. The preview rail isn't a
   // tool window — it shadows the file browser's side.
   const railPanes: { node: ReactNode; rank: number; side: 'left' | 'right' }[] = [
-    { node: chatSidebarPane, rank: 4, side: sidebarSide },
-    { node: gitCommitPane, rank: 3, side: gitSide },
+    { node: chatSidebarPane, rank: 5, side: sidebarSide },
+    { node: gitCommitPane, rank: 4, side: gitSide },
+    { node: gitLogPane, rank: 3, side: gitLogSide },
     { node: fileBrowserPane, rank: 2, side: railSide },
     { node: previewPane, rank: 1, side: railSide },
     { node: terminalPane, rank: 0, side: terminalSide }

@@ -177,6 +177,7 @@ export interface Translations {
     files: string
     terminal: string
     git: string
+    gitLog: string
     moveToLeft: string
     moveToRight: string
     newConsole: string
@@ -221,6 +222,11 @@ export interface Translations {
     showDiffWorkingTree: string
     compareTitle: (base: string, target: string) => string
     diffWorkingTreeTitle: (name: string) => string
+    logAria: string
+    logTitle: string
+    noCommits: string
+    loadMore: string
+    changedFiles: (count: string) => string
     ahead: (count: string) => string
     behind: (count: string) => string
   }

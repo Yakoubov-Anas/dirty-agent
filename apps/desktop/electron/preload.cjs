@@ -81,6 +81,9 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
     diffWorkingTree: (repoRoot, ref) => ipcRenderer.invoke('hermes:git:diffWorkingTree', repoRoot, ref),
     compareBranches: (repoRoot, base, target) =>
       ipcRenderer.invoke('hermes:git:compareBranches', repoRoot, base, target),
+    log: (repoRoot, options) => ipcRenderer.invoke('hermes:git:log', repoRoot, options),
+    commitDetail: (repoRoot, hash) => ipcRenderer.invoke('hermes:git:commitDetail', repoRoot, hash),
+    commitDiff: (repoRoot, hash) => ipcRenderer.invoke('hermes:git:commitDiff', repoRoot, hash),
     pull: repoRoot => ipcRenderer.invoke('hermes:git:pull', repoRoot),
     push: repoRoot => ipcRenderer.invoke('hermes:git:push', repoRoot)
   },

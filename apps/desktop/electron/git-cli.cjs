@@ -558,16 +558,217 @@ async function gitCompareBranches(gitBinary, repoRootInput, base, target) {
   return { diff: stdout, ok: true }
 }
 
+// ─── Log (history panel) ──────────────────────────────────────────────────
+
+// Field + record separators that won't appear in commit metadata.
+const LOG_FIELD = '\x1f'
+const LOG_RECORD = '\x1e'
+
+// Paged commit log. Returns {hash, parents[], author, email, date(iso),
+// subject, refs[]} per commit plus hasMore so the UI can lazy-load. %P drives
+// the graph lane renderer; %D gives ref names (branches/tags/HEAD) for chips.
+async function gitLog(gitBinary, repoRootInput, options = {}) {
+  const repoRoot = safeRepoRoot(repoRootInput)
+  const limit = Math.max(1, Math.min(1000, Number.parseInt(String(options.limit || 100), 10) || 100))
+  const skip = Math.max(0, Number.parseInt(String(options.skip || 0), 10) || 0)
+  // Ask for one extra so we can report hasMore without a second call.
+  const format = ['%H', '%P', '%an', '%ae', '%aI', '%s', '%D'].join(LOG_FIELD) + LOG_RECORD
+  const args = ['log', `--pretty=format:${format}`, `--max-count=${limit + 1}`, `--skip=${skip}`]
+
+  if (options.branch === 'all') {
+    args.push('--all')
+  } else if (options.branch) {
+    args.push(String(options.branch))
+  }
+
+  if (options.author) {
+    args.push(`--author=${String(options.author)}`)
+  }
+
+  if (options.query) {
+    // Match in the commit message (case-insensitive).
+    args.push('-i', `--grep=${String(options.query)}`)
+  }
+
+  if (options.path) {
+    args.push('--', String(options.path))
+  }
+
+  const { code, stderr, stdout } = await runGit(gitBinary, repoRoot, args)
+
+  if (code !== 0) {
+    return { error: stderr.trim() || `git log exited with code ${code}`, ok: false }
+  }
+
+  const records = stdout.split(LOG_RECORD).map(r => r.replace(/^\n/, '')).filter(r => r.trim())
+  const hasMore = records.length > limit
+  const commits = records.slice(0, limit).map(record => {
+    const [hash, parents, author, email, date, subject, refs] = record.split(LOG_FIELD)
+
+    return {
+      author: author || '',
+      date: date || '',
+      email: email || '',
+      hash: hash || '',
+      parents: (parents || '').trim() ? parents.trim().split(' ') : [],
+      refs: parseRefs(refs),
+      subject: subject || ''
+    }
+  })
+
+  return { commits, hasMore, ok: true }
+}
+
+// Parse a %D ref string into structured chips. Examples:
+//   "HEAD -> dev, origin/dev, tag: v1.0"
+// → [{name:'dev',kind:'head'}, {name:'origin/dev',kind:'remote'}, {name:'v1.0',kind:'tag'}]
+function parseRefs(raw) {
+  const text = (raw || '').trim()
+
+  if (!text) {
+    return []
+  }
+
+  const refs = []
+
+  for (const part of text.split(',')) {
+    let token = part.trim()
+
+    if (!token) {
+      continue
+    }
+
+    let isHead = false
+
+    // "HEAD -> dev" marks the current branch.
+    if (token.startsWith('HEAD -> ')) {
+      isHead = true
+      token = token.slice('HEAD -> '.length).trim()
+    } else if (token === 'HEAD') {
+      refs.push({ kind: 'head', name: 'HEAD' })
+
+      continue
+    }
+
+    if (token.startsWith('tag: ')) {
+      refs.push({ kind: 'tag', name: token.slice('tag: '.length).trim() })
+
+      continue
+    }
+
+    // A slash-prefixed segment that matches a remote (origin/…) → remote ref.
+    const kind = isHead ? 'current' : /^[^/]+\/.+/.test(token) ? 'remote' : 'local'
+    refs.push({ kind, name: token })
+  }
+
+  return refs
+}
+
+// Full detail for one commit: metadata, full message body, and the per-file
+// stat list. The diff itself is fetched separately (gitCommitDiff) and rendered
+// by the shared DiffViewer.
+async function gitCommitDetail(gitBinary, repoRootInput, hash) {
+  const repoRoot = safeRepoRoot(repoRootInput)
+  const ref = String(hash || '').trim()
+
+  if (!ref) {
+    return { error: 'No commit specified.', ok: false }
+  }
+
+  const format = ['%H', '%P', '%an', '%ae', '%aI', '%cn', '%cI', '%s', '%b'].join(LOG_FIELD)
+  const meta = await runGit(gitBinary, repoRoot, ['show', '--no-patch', `--pretty=format:${format}`, ref])
+
+  if (meta.code !== 0) {
+    return { error: meta.stderr.trim() || `git show exited with code ${meta.code}`, ok: false }
+  }
+
+  const [hashOut, parents, author, email, authorDate, committer, committerDate, subject, body] =
+    meta.stdout.split(LOG_FIELD)
+
+  // Changed files with status (name-status, NUL-safe).
+  const namesArgs = ['show', '--no-patch', '--name-status', '-z', `--pretty=format:`, ref]
+  const names = await runGit(gitBinary, repoRoot, namesArgs)
+  const files = []
+
+  if (names.code === 0) {
+    const tokens = names.stdout.split('\0').filter(t => t !== '')
+    let i = 0
+
+    while (i < tokens.length) {
+      const status = tokens[i]
+
+      // Status codes: M/A/D/T/...; R### and C### consume two path tokens.
+      if (/^[RC]\d*$/.test(status)) {
+        const from = tokens[i + 1] || ''
+        const to = tokens[i + 2] || ''
+        files.push({ origPath: from, path: to, status: status[0] })
+        i += 3
+      } else if (/^[A-Z]$/.test(status)) {
+        files.push({ origPath: null, path: tokens[i + 1] || '', status })
+        i += 2
+      } else {
+        i += 1
+      }
+    }
+  }
+
+  return {
+    commit: {
+      author: author || '',
+      authorDate: authorDate || '',
+      body: (body || '').trim(),
+      committer: committer || '',
+      committerDate: committerDate || '',
+      email: email || '',
+      files,
+      hash: hashOut || ref,
+      parents: (parents || '').trim() ? parents.trim().split(' ') : [],
+      subject: subject || ''
+    },
+    ok: true
+  }
+}
+
+// Unified diff for an entire commit (vs its first parent; root commit vs empty
+// tree). Rendered by the shared DiffViewer.
+async function gitCommitDiff(gitBinary, repoRootInput, hash) {
+  const repoRoot = safeRepoRoot(repoRootInput)
+  const ref = String(hash || '').trim()
+
+  if (!ref) {
+    return { error: 'No commit specified.', ok: false }
+  }
+
+  // `git show` against the commit emits the full multi-file patch; --first-parent
+  // keeps merge commits readable (diff vs the mainline parent).
+  const { code, stderr, stdout } = await runGit(gitBinary, repoRoot, [
+    'show',
+    '--no-color',
+    '--first-parent',
+    '--format=',
+    ref
+  ])
+
+  if (code !== 0 && !stdout) {
+    return { error: stderr.trim() || `git show exited with code ${code}`, ok: false }
+  }
+
+  return { diff: stdout, ok: true }
+}
+
 module.exports = {
   gitBranches,
   gitCheckout,
   gitCommit,
+  gitCommitDetail,
+  gitCommitDiff,
   gitCompareBranches,
   gitCreateBranch,
   gitDeleteBranch,
   gitDiff,
   gitDiffUntracked,
   gitDiffWorkingTree,
+  gitLog,
   gitMerge,
   gitPull,
   gitPush,

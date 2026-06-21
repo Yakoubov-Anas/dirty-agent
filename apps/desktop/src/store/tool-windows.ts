@@ -1,6 +1,12 @@
 import { atom, computed, type ReadableAtom } from 'nanostores'
 
-import { CHAT_SIDEBAR_PANE_ID, FILE_BROWSER_PANE_ID, GIT_COMMIT_PANE_ID, TERMINAL_PANE_ID } from './layout'
+import {
+  CHAT_SIDEBAR_PANE_ID,
+  FILE_BROWSER_PANE_ID,
+  GIT_COMMIT_PANE_ID,
+  GIT_LOG_PANE_ID,
+  TERMINAL_PANE_ID
+} from './layout'
 import { $paneStates, setPaneOpen, togglePane } from './panes'
 
 export type ToolWindowSide = 'left' | 'right'
@@ -9,18 +15,20 @@ export type ToolWindowId =
   | typeof FILE_BROWSER_PANE_ID
   | typeof TERMINAL_PANE_ID
   | typeof GIT_COMMIT_PANE_ID
+  | typeof GIT_LOG_PANE_ID
 
 const STORAGE_KEY = 'hermes.desktop.toolWindowSides.v1'
 
 // JetBrains-style tool windows: each panel docks on a side, toggled from the
 // edge stripe, relocated via the stripe's right-click menu. Defaults mirror the
-// classic layout — sessions/agent + commit on the left, file browser + console
-// on the right.
+// classic layout — sessions/agent + commit + log on the left, file browser +
+// console on the right.
 export const TOOL_WINDOW_DEFAULT_SIDES: Record<ToolWindowId, ToolWindowSide> = {
   [CHAT_SIDEBAR_PANE_ID]: 'left',
   [FILE_BROWSER_PANE_ID]: 'right',
   [TERMINAL_PANE_ID]: 'right',
-  [GIT_COMMIT_PANE_ID]: 'left'
+  [GIT_COMMIT_PANE_ID]: 'left',
+  [GIT_LOG_PANE_ID]: 'left'
 }
 
 export interface ToolWindowMeta {
@@ -32,6 +40,7 @@ export interface ToolWindowMeta {
 export const TOOL_WINDOWS: readonly ToolWindowMeta[] = [
   { icon: 'comment-discussion', id: CHAT_SIDEBAR_PANE_ID },
   { icon: 'git-commit', id: GIT_COMMIT_PANE_ID },
+  { icon: 'git-branch', id: GIT_LOG_PANE_ID },
   { icon: 'files', id: FILE_BROWSER_PANE_ID },
   { icon: 'terminal', id: TERMINAL_PANE_ID }
 ]

@@ -60,6 +60,10 @@ function labelForToolWindow(id: ToolWindowId, t: ReturnType<typeof useI18n>['t']
     return t.toolWindows.git
   }
 
+  if (id === 'git-log') {
+    return t.toolWindows.gitLog
+  }
+
   return t.toolWindows.files
 }
 

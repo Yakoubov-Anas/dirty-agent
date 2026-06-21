@@ -6323,6 +6323,30 @@ ipcMain.handle('hermes:git:compareBranches', async (_event, repoRoot, base, targ
   }
 })
 
+ipcMain.handle('hermes:git:log', async (_event, repoRoot, options) => {
+  try {
+    return await gitCli.gitLog(resolveGitBinary(), repoRoot, options || {})
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
+
+ipcMain.handle('hermes:git:commitDetail', async (_event, repoRoot, hash) => {
+  try {
+    return await gitCli.gitCommitDetail(resolveGitBinary(), repoRoot, hash)
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
+
+ipcMain.handle('hermes:git:commitDiff', async (_event, repoRoot, hash) => {
+  try {
+    return await gitCli.gitCommitDiff(resolveGitBinary(), repoRoot, hash)
+  } catch (error) {
+    return gitErrorResult(error)
+  }
+})
+
 ipcMain.handle('hermes:git:pull', async (_event, repoRoot) => {
   try {
     return await gitCli.gitPull(resolveGitBinary(), repoRoot)
