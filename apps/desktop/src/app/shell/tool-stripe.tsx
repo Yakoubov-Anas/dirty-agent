@@ -12,7 +12,7 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useStore } from '@nanostores/react'
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
@@ -72,6 +72,9 @@ function labelForToolWindow(id: ToolWindowId, t: ReturnType<typeof useI18n>['t']
     case 'git-log':
       return t.toolWindows.gitLog
 
+    case 'database':
+      return t.toolWindows.database
+
     default:
       return t.toolWindows.files
   }
@@ -81,9 +84,35 @@ function labelForToolWindow(id: ToolWindowId, t: ReturnType<typeof useI18n>['t']
 // (panels dock on the side) and a BOTTOM group (panels dock in the bottom dock),
 // separated by a flexible spacer. Drag buttons to reorder within a group or move
 // them between groups/sides; right-click for the same via a menu.
+//
+// Both stripes share ONE DndContext (ToolStripeDndProvider) so a button can be
+// dragged from one stripe to the other to change its side.
 export function ToolStripe({ side }: { side: ToolWindowSide }) {
   // Re-render when placements change (group membership/order).
   useStore($toolWindowPlacements)
+
+  const topIds = toolWindowsInGroup(side, 'top')
+  const bottomIds = toolWindowsInGroup(side, 'bottom')
+
+  return (
+    <div
+      className={cn(
+        'z-10 flex h-full w-(--tool-stripe-width) shrink-0 flex-col items-center bg-(--ui-chat-surface-background) py-1.5 [-webkit-app-region:no-drag]',
+        side === 'left' ? 'border-r border-(--ui-stroke-tertiary)' : 'border-l border-(--ui-stroke-tertiary)'
+      )}
+      data-tool-stripe={side}
+    >
+      <StripeGroup ids={topIds} segment="top" side={side} />
+      {/* Spacer pushes the bottom group to the stripe's bottom edge. */}
+      <div className="min-h-4 flex-1" />
+      <StripeGroup ids={bottomIds} segment="bottom" side={side} />
+    </div>
+  )
+}
+
+// Single DnD context shared by both stripes. Wrap the stripe row with this so a
+// button can be dragged across stripes (left ↔ right) to change its side.
+export function ToolStripeDndProvider({ children }: { children: ReactNode }) {
   const [activeId, setActiveId] = useState<null | ToolWindowId>(null)
 
   const sensors = useSensors(
@@ -91,9 +120,6 @@ export function ToolStripe({ side }: { side: ToolWindowSide }) {
     // real drag past the threshold starts sorting.
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
-
-  const topIds = toolWindowsInGroup(side, 'top')
-  const bottomIds = toolWindowsInGroup(side, 'bottom')
 
   const onDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as ToolWindowId)
@@ -142,19 +168,7 @@ export function ToolStripe({ side }: { side: ToolWindowSide }) {
       onDragStart={onDragStart}
       sensors={sensors}
     >
-      <div
-        className={cn(
-          'z-10 flex h-full w-(--tool-stripe-width) shrink-0 flex-col items-center bg-(--ui-chat-surface-background) py-1.5 [-webkit-app-region:no-drag]',
-          side === 'left' ? 'border-r border-(--ui-stroke-tertiary)' : 'border-l border-(--ui-stroke-tertiary)'
-        )}
-        data-tool-stripe={side}
-      >
-        <StripeGroup ids={topIds} segment="top" side={side} />
-        {/* Spacer pushes the bottom group to the stripe's bottom edge. */}
-        <div className="min-h-4 flex-1" />
-        <StripeGroup ids={bottomIds} segment="bottom" side={side} />
-      </div>
-
+      {children}
       <DragOverlay dropAnimation={null}>
         {activeMeta ? (
           <div className="flex size-(--titlebar-control-size) items-center justify-center rounded-[4px] bg-(--ui-control-active-background) text-foreground shadow-md">

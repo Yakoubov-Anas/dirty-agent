@@ -1,5 +1,6 @@
 import { atom, computed } from 'nanostores'
 
+import { closeDbRailTab } from './database'
 import { $rightRailActiveTabId, RIGHT_RAIL_PREVIEW_TAB_ID, type RightRailTabId, selectRightRailTab } from './layout'
 import { $activeSessionId, $selectedStoredSessionId } from './session'
 
@@ -474,6 +475,13 @@ export function closeRightRailTab(tabId: RightRailTabId) {
     if ($previewTarget.get()) {
       dismissPreviewTarget()
     }
+
+    return
+  }
+
+  // Database grid / SQL console tabs live in their own store.
+  if (tabId.startsWith('db:')) {
+    closeDbRailTab(tabId)
 
     return
   }

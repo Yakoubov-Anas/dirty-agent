@@ -2217,6 +2217,183 @@ async def fs_default_cwd():
     return {"cwd": cwd, "branch": _fs_git_branch(cwd)}
 
 
+# ─── Database manager (SQLite first) ──────────────────────────────────────────
+
+
+class DbConnectRequest(BaseModel):
+    engine: str = "sqlite"
+    name: str = ""
+    file: Optional[str] = None
+    host: Optional[str] = None
+    port: Optional[int] = None
+    database: Optional[str] = None
+    user: Optional[str] = None
+    password: Optional[str] = None
+
+
+class DbTestRequest(BaseModel):
+    engine: str = "sqlite"
+    file: Optional[str] = None
+    host: Optional[str] = None
+    port: Optional[int] = None
+    database: Optional[str] = None
+    user: Optional[str] = None
+    password: Optional[str] = None
+
+
+class DbQueryRequest(BaseModel):
+    connectionId: str
+    sql: str
+    limit: Optional[int] = None
+
+
+def _db_error(exc: Exception) -> HTTPException:
+    from hermes_cli.db_manager import DbError
+
+    if isinstance(exc, DbError):
+        return HTTPException(status_code=400, detail=str(exc))
+    return HTTPException(status_code=500, detail=str(exc) or "Database error")
+
+
+@app.get("/api/db/connections")
+async def db_connections():
+    from hermes_cli import db_manager
+
+    return {"connections": db_manager.list_connections()}
+
+
+@app.get("/api/db/driver")
+async def db_driver(engine: str):
+    from hermes_cli import db_manager
+
+    return db_manager.driver_status(engine)
+
+
+@app.post("/api/db/driver/install")
+async def db_driver_install(engine: str):
+    from hermes_cli import db_manager
+
+    try:
+        return db_manager.install_driver(engine)
+    except Exception as exc:  # noqa: BLE001
+        raise _db_error(exc)
+
+
+@app.post("/api/db/test")
+async def db_test(payload: DbTestRequest):
+    from hermes_cli import db_manager
+
+    try:
+        return db_manager.test_connection(
+            engine=payload.engine,
+            host=payload.host,
+            port=payload.port,
+            database=payload.database,
+            user=payload.user,
+            password=payload.password,
+            file=payload.file,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise _db_error(exc)
+
+
+@app.post("/api/db/connect")
+async def db_connect(payload: DbConnectRequest):
+    from hermes_cli import db_manager
+
+    try:
+        spec = db_manager.add_connection(
+            engine=payload.engine,
+            name=payload.name,
+            file=payload.file,
+            host=payload.host,
+            port=payload.port,
+            database=payload.database,
+            user=payload.user,
+            password=payload.password,
+        )
+    except Exception as exc:  # noqa: BLE001 — translate to HTTP error
+        raise _db_error(exc)
+    return {"connection": spec}
+
+
+@app.delete("/api/db/connections/{connection_id}")
+async def db_remove_connection(connection_id: str):
+    from hermes_cli import db_manager
+
+    try:
+        db_manager.remove_connection(connection_id)
+    except Exception as exc:  # noqa: BLE001
+        raise _db_error(exc)
+    return {"ok": True}
+
+
+@app.get("/api/db/schema")
+async def db_schema(connectionId: str):
+    from hermes_cli import db_manager
+
+    try:
+        return db_manager.get_schema(connectionId)
+    except Exception as exc:  # noqa: BLE001
+        raise _db_error(exc)
+
+
+@app.post("/api/db/query")
+async def db_query(payload: DbQueryRequest):
+    from hermes_cli import db_manager
+
+    try:
+        return db_manager.run_query(payload.connectionId, payload.sql, payload.limit)
+    except Exception as exc:  # noqa: BLE001
+        raise _db_error(exc)
+
+
+@app.get("/api/db/table")
+async def db_table(connectionId: str, table: str, limit: int = 100, offset: int = 0):
+    from hermes_cli import db_manager
+
+    try:
+        return db_manager.get_table(connectionId, table, limit=limit, offset=offset)
+    except Exception as exc:  # noqa: BLE001
+        raise _db_error(exc)
+
+
+class DbUpdateCellRequest(BaseModel):
+    connectionId: str
+    table: str
+    column: str
+    value: Any = None
+    pk: dict[str, Any]
+
+
+class DbDeleteRowRequest(BaseModel):
+    connectionId: str
+    table: str
+    pk: dict[str, Any]
+
+
+@app.post("/api/db/update-cell")
+async def db_update_cell(payload: DbUpdateCellRequest):
+    from hermes_cli import db_manager
+
+    try:
+        return db_manager.update_cell(
+            payload.connectionId, payload.table, payload.column, payload.value, payload.pk
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise _db_error(exc)
+
+
+@app.post("/api/db/delete-row")
+async def db_delete_row(payload: DbDeleteRowRequest):
+    from hermes_cli import db_manager
+
+    try:
+        return db_manager.delete_row(payload.connectionId, payload.table, payload.pk)
+    except Exception as exc:  # noqa: BLE001
+        raise _db_error(exc)
+
+
 @app.get("/api/status")
 async def get_status(profile: Optional[str] = None):
     status_scope = None

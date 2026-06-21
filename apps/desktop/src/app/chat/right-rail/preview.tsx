@@ -16,6 +16,7 @@ import { Tip } from '@/components/ui/tooltip'
 import { translateNow, useI18n } from '@/i18n'
 import { isDesktopFsRemoteMode, revealDesktopPathInOS } from '@/lib/desktop-fs'
 import { cn } from '@/lib/utils'
+import { $dbRailTabs, type DbRailTab } from '@/store/database'
 import {
   $rightRailActiveTabId,
   FILE_BROWSER_PANE_ID,
@@ -36,6 +37,9 @@ import {
 } from '@/store/preview'
 import { $currentCwd } from '@/store/session'
 import { $toolWindowSide } from '@/store/tool-windows'
+
+import { DbConsolePane } from '../../database/db-console-pane'
+import { DbTablePane } from '../../database/db-table-pane'
 
 import { filePathForTarget, relativePathFromCwd } from './preview-file'
 import { PreviewPane } from './preview-pane'
@@ -59,7 +63,8 @@ interface ChatPreviewRailProps {
 interface RailTab {
   id: RightRailTabId
   label: string
-  target: PreviewTarget
+  target?: PreviewTarget
+  db?: DbRailTab
 }
 
 function tabLabelFor(target: PreviewTarget): string {
@@ -116,12 +121,15 @@ export function ChatPreviewRail({ onRestartServer, setTitlebarToolGroup }: ChatP
     wheelCleanupRef.current = () => el.removeEventListener('wheel', onWheel)
   }, [])
 
+  const dbRailTabs = useStore($dbRailTabs)
+
   const tabs = useMemo<readonly RailTab[]>(
     () => [
       ...(previewTarget ? [{ id: RIGHT_RAIL_PREVIEW_TAB_ID, label: t.preview.tab, target: previewTarget } as RailTab] : []),
-      ...filePreviewTabs.map(({ id, target }) => ({ id, label: tabLabelFor(target), target }) as RailTab)
+      ...filePreviewTabs.map(({ id, target }) => ({ id, label: tabLabelFor(target), target }) as RailTab),
+      ...dbRailTabs.map(db => ({ db, id: db.id, label: db.title }) as RailTab)
     ],
-    [filePreviewTabs, previewTarget, t.preview.tab]
+    [dbRailTabs, filePreviewTabs, previewTarget, t.preview.tab]
   )
 
   const activeTab = tabs.find(tab => tab.id === activeTabId) ?? tabs[0]
@@ -153,7 +161,7 @@ export function ChatPreviewRail({ onRestartServer, setTitlebarToolGroup }: ChatP
         >
           {tabs.map(tab => {
             const active = tab.id === activeTab.id
-            const isDirty = dirtyFiles.has(filePathForTarget(tab.target))
+            const isDirty = tab.target ? dirtyFiles.has(filePathForTarget(tab.target)) : false
 
             return (
               <ContextMenu key={tab.id}>
@@ -188,7 +196,7 @@ export function ChatPreviewRail({ onRestartServer, setTitlebarToolGroup }: ChatP
                     <Tip label={tab.label}>
                       <button
                         aria-selected={active}
-                        className="flex h-full min-w-0 max-w-full items-center gap-1.5 overflow-hidden pl-3 pr-2 text-left outline-none"
+                        className="flex h-full min-w-0 max-w-full items-center gap-1.5 overflow-hidden pl-3 pr-6 text-left outline-none"
                         onClick={() => selectRightRailTab(tab.id)}
                         role="tab"
                         type="button"
@@ -219,7 +227,16 @@ export function ChatPreviewRail({ onRestartServer, setTitlebarToolGroup }: ChatP
                     </button>
                   </div>
                 </ContextMenuTrigger>
-                <PreviewTabMenu cwd={cwd} onlyTab={tabs.length === 1} tab={tab} />
+                {tab.target ? (
+                  <PreviewTabMenu cwd={cwd} onlyTab={tabs.length === 1} tab={{ ...tab, target: tab.target }} />
+                ) : (
+                  <ContextMenuContent>
+                    <ContextMenuItem onSelect={() => closeRightRailTab(tab.id)}>
+                      <Codicon name="close" />
+                      {t.preview.closeTab(tab.label)}
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                )}
               </ContextMenu>
             )
           })}
@@ -235,13 +252,21 @@ export function ChatPreviewRail({ onRestartServer, setTitlebarToolGroup }: ChatP
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        <PreviewPane
-          embedded
-          onRestartServer={isPreview ? onRestartServer : undefined}
-          reloadRequest={previewReloadRequest}
-          setTitlebarToolGroup={setTitlebarToolGroup}
-          target={activeTab.target}
-        />
+        {activeTab.db ? (
+          activeTab.db.kind === 'table' && activeTab.db.table ? (
+            <DbTablePane connectionId={activeTab.db.connectionId} table={activeTab.db.table} />
+          ) : (
+            <DbConsolePane connectionId={activeTab.db.connectionId} />
+          )
+        ) : activeTab.target ? (
+          <PreviewPane
+            embedded
+            onRestartServer={isPreview ? onRestartServer : undefined}
+            reloadRequest={previewReloadRequest}
+            setTitlebarToolGroup={setTitlebarToolGroup}
+            target={activeTab.target}
+          />
+        ) : null}
       </div>
     </aside>
   )
@@ -250,7 +275,7 @@ export function ChatPreviewRail({ onRestartServer, setTitlebarToolGroup }: ChatP
 interface PreviewTabMenuProps {
   cwd: string
   onlyTab: boolean
-  tab: RailTab
+  tab: RailTab & { target: PreviewTarget }
 }
 
 function PreviewTabMenu({ cwd, onlyTab, tab }: PreviewTabMenuProps) {

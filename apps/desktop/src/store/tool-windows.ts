@@ -4,6 +4,7 @@ import { persistBoolean, storedBoolean } from '@/lib/storage'
 
 import {
   CHAT_SIDEBAR_PANE_ID,
+  DATABASE_PANE_ID,
   FILE_BROWSER_PANE_ID,
   GIT_COMMIT_PANE_ID,
   GIT_LOG_PANE_ID,
@@ -23,6 +24,7 @@ export type ToolWindowId =
   | typeof TERMINAL_PANE_ID
   | typeof GIT_COMMIT_PANE_ID
   | typeof GIT_LOG_PANE_ID
+  | typeof DATABASE_PANE_ID
 
 export interface ToolWindowPlacement {
   side: ToolWindowSide
@@ -47,19 +49,21 @@ export const TOOL_WINDOWS: readonly ToolWindowMeta[] = [
   { icon: 'git-commit', id: GIT_COMMIT_PANE_ID },
   { icon: 'git-branch', id: GIT_LOG_PANE_ID },
   { icon: 'files', id: FILE_BROWSER_PANE_ID },
+  { icon: 'database', id: DATABASE_PANE_ID },
   { icon: 'terminal', id: TERMINAL_PANE_ID }
 ]
 
 const TOOL_WINDOW_IDS = TOOL_WINDOWS.map(w => w.id)
 
 // Default layout: sessions/commit/log on the left side; files on the right
-// side; console in the bottom dock (JetBrains-like).
+// side; console + database in the bottom dock (JetBrains-like).
 export const TOOL_WINDOW_DEFAULT_PLACEMENTS: Record<ToolWindowId, ToolWindowPlacement> = {
   [CHAT_SIDEBAR_PANE_ID]: { order: 0, segment: 'top', side: 'left' },
   [GIT_COMMIT_PANE_ID]: { order: 1, segment: 'top', side: 'left' },
   [GIT_LOG_PANE_ID]: { order: 2, segment: 'top', side: 'left' },
   [FILE_BROWSER_PANE_ID]: { order: 0, segment: 'top', side: 'right' },
-  [TERMINAL_PANE_ID]: { order: 0, segment: 'bottom', side: 'left' }
+  [TERMINAL_PANE_ID]: { order: 0, segment: 'bottom', side: 'left' },
+  [DATABASE_PANE_ID]: { order: 1, segment: 'bottom', side: 'left' }
 }
 
 function defaultPlacement(id: ToolWindowId): ToolWindowPlacement {

@@ -24,11 +24,13 @@ import {
 } from '../lib/session-source'
 import { latestSessionTodos } from '../lib/todos'
 import { setCronFocusJobId, setCronJobs } from '../store/cron'
+import { $dbRailTabs } from '../store/database'
 import {
   $pinnedSessionIds,
   $sessionsLimit,
   bumpSessionsLimit,
   CHAT_SIDEBAR_PANE_ID,
+  DATABASE_PANE_ID,
   FILE_BROWSER_DEFAULT_WIDTH,
   FILE_BROWSER_MAX_WIDTH,
   FILE_BROWSER_MIN_WIDTH,
@@ -103,6 +105,7 @@ import {
 } from './chat/right-rail'
 import { ChatSidebar } from './chat/sidebar'
 import { CommandPalette } from './command-palette'
+import { DatabasePane } from './database/database-pane'
 import { FindInFilesDialog } from './find-in-files'
 import { useGatewayBoot } from './gateway/hooks/use-gateway-boot'
 import { useGatewayRequest } from './gateway/hooks/use-gateway-request'
@@ -223,6 +226,8 @@ export function DesktopController() {
   const resumeExhaustedSessionId = useStore($resumeExhaustedSessionId)
   const filePreviewTarget = useStore($filePreviewTarget)
   const previewTarget = useStore($previewTarget)
+  const dbRailTabs = useStore($dbRailTabs)
+  const hasRailContent = Boolean(previewTarget || filePreviewTarget) || dbRailTabs.length > 0
   const selectedStoredSessionId = useStore($selectedStoredSessionId)
   const terminalTakeover = useStore($terminalTakeover)
   const sidebarSide = useStore($toolWindowSide(CHAT_SIDEBAR_PANE_ID))
@@ -230,12 +235,14 @@ export function DesktopController() {
   const terminalSide = useStore($toolWindowSide(TERMINAL_PANE_ID))
   const gitSide = useStore($toolWindowSide(GIT_COMMIT_PANE_ID))
   const gitLogSide = useStore($toolWindowSide(GIT_LOG_PANE_ID))
+  const databaseSide = useStore($toolWindowSide(DATABASE_PANE_ID))
   // Segments decide dock vs side-column placement for each relocatable panel.
   const sidebarSegment = useStore($toolWindowSegment(CHAT_SIDEBAR_PANE_ID))
   const railSegment = useStore($toolWindowSegment(FILE_BROWSER_PANE_ID))
   const terminalSegment = useStore($toolWindowSegment(TERMINAL_PANE_ID))
   const gitSegment = useStore($toolWindowSegment(GIT_COMMIT_PANE_ID))
   const gitLogSegment = useStore($toolWindowSegment(GIT_LOG_PANE_ID))
+  const databaseSegment = useStore($toolWindowSegment(DATABASE_PANE_ID))
   // Open-sequence per pane → column order within a side (recent = near editor).
   const paneOpenSeq = useStore($paneOpenSeq)
   const profileScope = useStore($profileScope)
@@ -357,7 +364,7 @@ export function DesktopController() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!$filePreviewTarget.get() && !$previewTarget.get()) {
+      if (!$filePreviewTarget.get() && !$previewTarget.get() && $dbRailTabs.get().length === 0) {
         return
       }
 
@@ -1099,7 +1106,7 @@ export function DesktopController() {
   // "rail" side; the sessions/agent sidebar (sidebarSide) has its own.
   const previewPane = (
     <Pane
-      disabled={!chatOpen || (!previewTarget && !filePreviewTarget)}
+      disabled={!chatOpen || !hasRailContent}
       id="preview"
       key="preview"
       maxWidth={PREVIEW_RAIL_MAX_WIDTH}
@@ -1223,6 +1230,25 @@ export function DesktopController() {
       </Pane>
     ) : null
 
+  const databaseContent = <DatabasePane />
+
+  const databasePane =
+    !isSecondaryWindow() && databaseSegment === 'top' ? (
+      <Pane
+        defaultOpen={false}
+        disabled={!chatOpen}
+        id={DATABASE_PANE_ID}
+        key={DATABASE_PANE_ID}
+        maxWidth="42rem"
+        minWidth="20rem"
+        resizable
+        side={databaseSide}
+        width="26rem"
+      >
+        {databaseContent}
+      </Pane>
+    ) : null
+
   // Tool windows dock by side; order within a side runs from the window edge
   // inward to main. Rank = distance from main. We derive it from the open
   // SEQUENCE so the most-recently-opened panel sits closest to the editor
@@ -1235,6 +1261,7 @@ export function DesktopController() {
     { node: chatSidebarPane, rank: rankFor(CHAT_SIDEBAR_PANE_ID), side: sidebarSide },
     { node: gitCommitPane, rank: rankFor(GIT_COMMIT_PANE_ID), side: gitSide },
     { node: gitLogPane, rank: rankFor(GIT_LOG_PANE_ID), side: gitLogSide },
+    { node: databasePane, rank: rankFor(DATABASE_PANE_ID), side: databaseSide },
     { node: fileBrowserPane, rank: rankFor(FILE_BROWSER_PANE_ID), side: railSide },
     { node: previewPane, rank: rankFor(FILE_BROWSER_PANE_ID) - 0.5, side: railSide },
     { node: terminalPane, rank: rankFor(TERMINAL_PANE_ID), side: terminalSide }
@@ -1265,6 +1292,12 @@ export function DesktopController() {
           label: t.toolWindows.gitLog,
           side: gitLogSide
         },
+        databaseSegment === 'bottom' && {
+          content: databaseContent,
+          id: DATABASE_PANE_ID,
+          label: t.toolWindows.database,
+          side: databaseSide
+        },
         railSegment === 'bottom' && {
           content: fileBrowserContent,
           id: FILE_BROWSER_PANE_ID,
@@ -1287,7 +1320,7 @@ export function DesktopController() {
       mainOverlays={mainOverlays}
       onOpenSettings={openSettings}
       overlays={overlays}
-      previewPaneOpen={chatOpen && Boolean(previewTarget || filePreviewTarget)}
+      previewPaneOpen={chatOpen && hasRailContent}
       statusbarItems={statusbarItems}
       terminalPaneOpen={terminalSidebarOpen}
       titlebarTools={titlebarToolGroups.flat.right}

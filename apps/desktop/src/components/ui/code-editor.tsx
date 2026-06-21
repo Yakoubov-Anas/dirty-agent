@@ -48,6 +48,9 @@ export interface CodeEditorProps {
   /** Cmd/Ctrl+L — add the current selection (or line) to the chat composer as
    *  a file ref. Receives the 1-based start/end line range of the selection. */
   onAddSelectionRef?: (range: { start: number; end: number }) => void
+  /** Cmd/Ctrl+Enter — "run" action (e.g. SQL console). Receives the selected
+   *  text, or the statement under the caret (between semicolons) when empty. */
+  onRun?: (sql: string) => void
   /** Scroll to + place the cursor on this 1-based line/column. Re-applied
    *  whenever `revealKey` changes (so jumping to the same line twice works). */
   reveal?: { line: number; column?: number } | null
@@ -143,6 +146,7 @@ export function CodeEditor({
   className,
   onChange,
   onSave,
+  onRun,
   onAddSelectionRef,
   reveal,
   revealKey
@@ -157,9 +161,11 @@ export function CodeEditor({
   // call them without being torn down on every parent render.
   const onChangeRef = useRef(onChange)
   const onSaveRef = useRef(onSave)
+  const onRunRef = useRef(onRun)
   const onAddSelectionRefRef = useRef(onAddSelectionRef)
   onChangeRef.current = onChange
   onSaveRef.current = onSave
+  onRunRef.current = onRun
   onAddSelectionRefRef.current = onAddSelectionRef
 
   // Create the editor once.
@@ -190,6 +196,42 @@ export function CodeEditor({
           const start = view.state.doc.lineAt(range.from).number
           const end = view.state.doc.lineAt(range.to).number
           onAddSelectionRefRef.current({ end, start })
+
+          return true
+        }
+      },
+      {
+        // Run (e.g. SQL console): hand the consumer the current selection, or —
+        // when the selection is empty — the statement under the caret (the text
+        // between the nearest semicolons). preventDefault so it never inserts a
+        // newline.
+        key: 'Mod-Enter',
+        preventDefault: true,
+        run: view => {
+          if (!onRunRef.current) {
+            return false
+          }
+
+          const sel = view.state.selection.main
+          let sql = ''
+
+          if (!sel.empty) {
+            sql = view.state.sliceDoc(sel.from, sel.to)
+          } else {
+            const doc = view.state.doc.toString()
+            const caret = sel.from
+            let start = doc.lastIndexOf(';', caret - 1) + 1
+            let end = doc.indexOf(';', caret)
+
+            if (end === -1) {
+              end = doc.length
+            }
+
+            start = Math.max(0, start)
+            sql = doc.slice(start, end)
+          }
+
+          onRunRef.current(sql.trim())
 
           return true
         }

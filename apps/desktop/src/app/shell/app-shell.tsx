@@ -28,7 +28,7 @@ import { KeybindPanel } from './keybind-panel'
 import { StatusbarControls, type StatusbarItem } from './statusbar-controls'
 import { TITLEBAR_HEIGHT, titlebarControlsPosition } from './titlebar'
 import { TitlebarControls, type TitlebarTool } from './titlebar-controls'
-import { ToolStripe } from './tool-stripe'
+import { ToolStripe, ToolStripeDndProvider } from './tool-stripe'
 
 interface AppShellProps {
   // JetBrains-style bottom dock: bottom-segment tool windows render here, below
@@ -229,40 +229,42 @@ export function AppShell({
       )}
 
       <main className="relative z-3 flex min-h-0 w-full flex-1 flex-col overflow-hidden transition-none">
-        <div className="flex min-h-0 w-full flex-1">
-          {/* Left tool-window stripe — permanent icon rail at the window edge.
-              Secondary windows are compact and carry no stripes. */}
-          {!hideTitlebarControls && <ToolStripe side="left" />}
+        <ToolStripeDndProvider>
+          <div className="flex min-h-0 w-full flex-1">
+            {/* Left tool-window stripe — permanent icon rail at the window edge.
+                Secondary windows are compact and carry no stripes. */}
+            {!hideTitlebarControls && <ToolStripe side="left" />}
 
-          {/* Center column: panes on top, bottom dock below (between stripes). */}
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <PaneShell className="min-h-0 flex-1">
-              {/* Secondary windows have no header bar, so the titlebar zone lives at
-                  the top of the panes — keep it draggable there. Normal windows drag
-                  from the dedicated header bar instead. */}
-              {hideTitlebarControls && (
-                <>
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute left-0 top-0 z-1 h-(--titlebar-height) w-(--titlebar-controls-left) [-webkit-app-region:drag]"
-                  />
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute top-0 z-1 h-(--titlebar-height) left-[calc(var(--titlebar-controls-left)+(var(--titlebar-control-size)*2)+0.75rem)] right-[calc(var(--titlebar-tools-right)+var(--titlebar-tools-width)+0.75rem)] [-webkit-app-region:drag]"
-                  />
-                </>
-              )}
+            {/* Center column: panes on top, bottom dock below (between stripes). */}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              <PaneShell className="min-h-0 flex-1">
+                {/* Secondary windows have no header bar, so the titlebar zone lives at
+                    the top of the panes — keep it draggable there. Normal windows drag
+                    from the dedicated header bar instead. */}
+                {hideTitlebarControls && (
+                  <>
+                    <div
+                      aria-hidden="true"
+                      className="pointer-events-none absolute left-0 top-0 z-1 h-(--titlebar-height) w-(--titlebar-controls-left) [-webkit-app-region:drag]"
+                    />
+                    <div
+                      aria-hidden="true"
+                      className="pointer-events-none absolute top-0 z-1 h-(--titlebar-height) left-[calc(var(--titlebar-controls-left)+(var(--titlebar-control-size)*2)+0.75rem)] right-[calc(var(--titlebar-tools-right)+var(--titlebar-tools-width)+0.75rem)] [-webkit-app-region:drag]"
+                    />
+                  </>
+                )}
 
-              {children}
-            </PaneShell>
+                {children}
+              </PaneShell>
 
-            {/* Bottom dock (resizable). Renders null when no bottom panel open. */}
-            {bottomDock}
+              {/* Bottom dock (resizable). Renders null when no bottom panel open. */}
+              {bottomDock}
+            </div>
+
+            {/* Right tool-window stripe. */}
+            {!hideTitlebarControls && <ToolStripe side="right" />}
           </div>
-
-          {/* Right tool-window stripe. */}
-          {!hideTitlebarControls && <ToolStripe side="right" />}
-        </div>
+        </ToolStripeDndProvider>
 
         {/* Fixed overlays scoped to main's stacking context (terminal). Rendered
             after PaneShell so it paints over pane content, but its z stays under

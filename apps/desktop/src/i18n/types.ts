@@ -178,6 +178,7 @@ export interface Translations {
     terminal: string
     git: string
     gitLog: string
+    database: string
     moveToLeft: string
     moveToRight: string
     moveToTop: string
@@ -234,6 +235,55 @@ export interface Translations {
     changedFiles: (count: string) => string
     ahead: (count: string) => string
     behind: (count: string) => string
+  }
+
+  database: {
+    aria: string
+    title: string
+    empty: string
+    addConnection: string
+    removeConnection: string
+    refreshSchema: string
+    selectConnection: string
+    openDatabase: string
+    noTables: string
+    newConsole: string
+    openData: string
+    rowRange: (start: string, end: string) => string
+    prevPage: string
+    nextPage: string
+    queryPlaceholder: string
+    run: string
+    runShortcut: string
+    runHint: string
+    truncated: string
+    filterResults: string
+    export: string
+    exportCsv: string
+    exportJson: string
+    copyRow: string
+    copyCell: string
+    editCell: string
+    newConnection: string
+    connectionName: string
+    optional: string
+    engine: string
+    host: string
+    port: string
+    databaseField: string
+    user: string
+    password: string
+    testConnection: string
+    testOk: string
+    connectionFailed: string
+    driverMissing: (pkg: string) => string
+    installDriver: string
+    installingDriver: string
+    file: string
+    openTable: (name: string) => string
+    rowsInfo: (rows: string, ms: string) => string
+    statementOk: (rows: string) => string
+    filteredCount: (shown: string, total: string) => string
   }
 
   keybinds: {
