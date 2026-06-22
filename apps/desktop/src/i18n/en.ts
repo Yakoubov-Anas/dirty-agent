@@ -167,6 +167,7 @@ export const en: Translations = {
     gitLog: 'Log',
     database: 'Database',
     browser: 'Browser',
+    run: 'Run',
     moveToLeft: 'Move to left',
     moveToRight: 'Move to right',
     moveToTop: 'Move to top',
@@ -290,6 +291,35 @@ export const en: Translations = {
     aiControlOff: 'AI control off — click to let the agent drive this browser',
     empty: 'No page loaded',
     emptyHint: 'Type a URL above to start browsing.'
+  },
+
+  run: {
+    title: 'Run',
+    widgetTitle: 'Run configurations',
+    noConfig: 'Add configuration',
+    empty: 'No run configurations yet.',
+    run: 'Run',
+    stop: 'Stop',
+    rerun: 'Rerun',
+    clear: 'Clear output',
+    noOutput: 'No output yet. Run a configuration to see results here.',
+    addConfig: 'Add configuration…',
+    editConfig: 'Edit',
+    deleteConfig: 'Delete',
+    save: 'Save',
+    fieldName: 'Name',
+    fieldNamePlaceholder: 'e.g. Run tests',
+    fieldCommand: 'Command',
+    fieldCommandPlaceholder: 'e.g. npm test',
+    fieldCwd: 'Working directory',
+    fieldCwdPlaceholder: 'Defaults to the project directory',
+    fieldEnv: 'Environment variables',
+    fieldEnvPlaceholder: 'KEY=value (one per line)',
+    running: 'Running',
+    exited: 'Done',
+    stopped: 'Stopped',
+    failed: 'Failed',
+    idle: 'Idle'
   },
 
   keybinds: {

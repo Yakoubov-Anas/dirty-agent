@@ -163,6 +163,7 @@ export const zh: Translations = {
     gitLog: '日志',
     database: '数据库',
     browser: '浏览器',
+    run: '运行',
     moveToLeft: '移到左侧',
     moveToRight: '移到右侧',
     moveToTop: '移到顶部',
@@ -286,6 +287,35 @@ export const zh: Translations = {
     aiControlOff: 'AI 控制已关闭 — 点击以允许智能体操作此浏览器',
     empty: '未加载页面',
     emptyHint: '在上方输入网址开始浏览。'
+  },
+
+  run: {
+    title: '运行',
+    widgetTitle: '运行配置',
+    noConfig: '添加配置',
+    empty: '尚无运行配置。',
+    run: '运行',
+    stop: '停止',
+    rerun: '重新运行',
+    clear: '清除输出',
+    noOutput: '暂无输出。运行一个配置即可在此查看结果。',
+    addConfig: '添加配置…',
+    editConfig: '编辑',
+    deleteConfig: '删除',
+    save: '保存',
+    fieldName: '名称',
+    fieldNamePlaceholder: '例如：运行测试',
+    fieldCommand: '命令',
+    fieldCommandPlaceholder: '例如：npm test',
+    fieldCwd: '工作目录',
+    fieldCwdPlaceholder: '默认为项目目录',
+    fieldEnv: '环境变量',
+    fieldEnvPlaceholder: 'KEY=value（每行一个）',
+    running: '运行中',
+    exited: '完成',
+    stopped: '已停止',
+    failed: '失败',
+    idle: '空闲'
   },
 
   keybinds: {

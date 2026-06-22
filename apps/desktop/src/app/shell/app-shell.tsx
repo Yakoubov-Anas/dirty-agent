@@ -23,6 +23,7 @@ import { isSecondaryWindow } from '@/store/windows'
 import { BranchWidget } from '../git/branch-widget'
 import { GitDiffDialog } from '../git/diff-dialog'
 import { SIDEBAR_COLLAPSE_MEDIA_QUERY } from '../layout-constants'
+import { RunConfigWidget } from '../run/run-config-widget'
 
 import { KeybindPanel } from './keybind-panel'
 import { StatusbarControls, type StatusbarItem } from './statusbar-controls'
@@ -218,7 +219,9 @@ export function AppShell({
             >
               <BranchWidget />
             </div>
-            <div className="flex flex-1 items-center justify-center" />
+            <div className="flex flex-1 items-center justify-center">
+              <RunConfigWidget />
+            </div>
             <div
               className="flex min-w-0 items-center justify-end gap-1"
               style={{ paddingRight: 'calc(var(--titlebar-tools-right) + var(--titlebar-tools-width) + 0.5rem)' }}

@@ -39,6 +39,7 @@ import {
   GIT_COMMIT_PANE_ID,
   GIT_LOG_PANE_ID,
   pinSession,
+  RUN_PANE_ID,
   setSidebarOverlayMounted,
   SIDEBAR_DEFAULT_WIDTH,
   SIDEBAR_MAX_WIDTH,
@@ -124,6 +125,7 @@ import { $terminalTakeover } from './right-sidebar/store'
 import { PersistentTerminals, TerminalSlot } from './right-sidebar/terminal/persistent'
 import { TerminalTabsBar } from './right-sidebar/terminal/tabs'
 import { CRON_ROUTE, NEW_CHAT_ROUTE, routeSessionId, sessionRoute, SETTINGS_ROUTE } from './routes'
+import { RunPane } from './run/run-pane'
 import { SessionPickerOverlay } from './session-picker-overlay'
 import { SessionSwitcher } from './session-switcher'
 import { useContextSuggestions } from './session/hooks/use-context-suggestions'
@@ -239,6 +241,7 @@ export function DesktopController() {
   const gitLogSide = useStore($toolWindowSide(GIT_LOG_PANE_ID))
   const databaseSide = useStore($toolWindowSide(DATABASE_PANE_ID))
   const browserSide = useStore($toolWindowSide(BROWSER_PANE_ID))
+  const runSide = useStore($toolWindowSide(RUN_PANE_ID))
   // Segments decide dock vs side-column placement for each relocatable panel.
   const sidebarSegment = useStore($toolWindowSegment(CHAT_SIDEBAR_PANE_ID))
   const railSegment = useStore($toolWindowSegment(FILE_BROWSER_PANE_ID))
@@ -247,6 +250,7 @@ export function DesktopController() {
   const gitLogSegment = useStore($toolWindowSegment(GIT_LOG_PANE_ID))
   const databaseSegment = useStore($toolWindowSegment(DATABASE_PANE_ID))
   const browserSegment = useStore($toolWindowSegment(BROWSER_PANE_ID))
+  const runSegment = useStore($toolWindowSegment(RUN_PANE_ID))
   // Open-sequence per pane → column order within a side (recent = near editor).
   const paneOpenSeq = useStore($paneOpenSeq)
   const profileScope = useStore($profileScope)
@@ -1272,6 +1276,25 @@ export function DesktopController() {
       </Pane>
     ) : null
 
+  const runContent = <RunPane />
+
+  const runPane =
+    !isSecondaryWindow() && runSegment === 'top' ? (
+      <Pane
+        defaultOpen={false}
+        disabled={!chatOpen}
+        id={RUN_PANE_ID}
+        key={RUN_PANE_ID}
+        maxWidth="60rem"
+        minWidth="20rem"
+        resizable
+        side={runSide}
+        width="28rem"
+      >
+        {runContent}
+      </Pane>
+    ) : null
+
   // Tool windows dock by side; order within a side runs from the window edge
   // inward to main. Rank = distance from main. We derive it from the open
   // SEQUENCE so the most-recently-opened panel sits closest to the editor
@@ -1286,6 +1309,7 @@ export function DesktopController() {
     { node: gitLogPane, rank: rankFor(GIT_LOG_PANE_ID), side: gitLogSide },
     { node: databasePane, rank: rankFor(DATABASE_PANE_ID), side: databaseSide },
     { node: browserPane, rank: rankFor(BROWSER_PANE_ID), side: browserSide },
+    { node: runPane, rank: rankFor(RUN_PANE_ID), side: runSide },
     { node: fileBrowserPane, rank: rankFor(FILE_BROWSER_PANE_ID), side: railSide },
     { node: previewPane, rank: rankFor(FILE_BROWSER_PANE_ID) - 0.5, side: railSide },
     { node: terminalPane, rank: rankFor(TERMINAL_PANE_ID), side: terminalSide }
@@ -1327,6 +1351,12 @@ export function DesktopController() {
           id: BROWSER_PANE_ID,
           label: t.toolWindows.browser,
           side: browserSide
+        },
+        runSegment === 'bottom' && {
+          content: runContent,
+          id: RUN_PANE_ID,
+          label: t.toolWindows.run,
+          side: runSide
         },
         railSegment === 'bottom' && {
           content: fileBrowserContent,

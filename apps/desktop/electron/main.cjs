@@ -363,6 +363,8 @@ let rendererTitleBarTheme = null
 const terminalSessions = new Map()
 // Marks a webContents that already has its terminal 'destroyed' cleanup hook.
 const TERMINAL_DESTROY_HOOK = Symbol('hermesTerminalDestroyHook')
+// Same, for run-configuration sessions.
+const RUN_DESTROY_HOOK = Symbol('hermesRunDestroyHook')
 
 // Force the NATIVE window appearance (vibrancy material, titlebar, the
 // pre-first-paint window background) to follow the APP theme instead of the
@@ -6488,6 +6490,137 @@ ipcMain.handle('hermes:terminal:resize', (_event, id, size = {}) => {
   return true
 })
 ipcMain.handle('hermes:terminal:dispose', (_event, id) => disposeTerminalSession(String(id || '')))
+
+// ── Run configurations: one-shot command execution with streamed output ──────
+// Unlike the interactive terminal PTY above, this runs a single shell command
+// (e.g. `npm test`) and streams stdout/stderr + the exit code back to the
+// renderer's Run panel. Mirrors the terminal channel pattern.
+const runSessions = new Map()
+
+function runChannel(id, suffix) {
+  return `hermes:run:${id}:${suffix}`
+}
+
+function disposeRunSession(id) {
+  const info = runSessions.get(id)
+
+  if (!info) {
+    return false
+  }
+
+  runSessions.delete(id)
+  killProcessTree(info.child)
+
+  return true
+}
+
+// Kill the whole process tree, not just the shell we spawned. With shell:true
+// the immediate child is the shell; the real work (e.g. a dev server holding a
+// port) lives in its descendants, which a plain child.kill() would orphan.
+function killProcessTree(child) {
+  const pid = child?.pid
+
+  if (!pid) {
+    return
+  }
+
+  if (IS_WINDOWS) {
+    // taskkill /T kills the PID and all its children.
+    try {
+      spawn('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true })
+    } catch {
+      try {
+        child.kill()
+      } catch {
+        // already gone
+      }
+    }
+
+    return
+  }
+
+  // POSIX: the child is a process-group leader (detached:true), so a negative
+  // pid signals the entire group. Fall back to killing just the child.
+  try {
+    process.kill(-pid, 'SIGTERM')
+  } catch {
+    try {
+      child.kill('SIGTERM')
+    } catch {
+      // already gone
+    }
+  }
+}
+
+ipcMain.handle('hermes:run:start', async (event, payload = {}) => {
+  const command = String(payload?.command || '').trim()
+
+  if (!command) {
+    throw new Error('run:start: empty command')
+  }
+
+  const id = crypto.randomUUID()
+  const cwd = safeTerminalCwd(payload?.cwd)
+  const env = terminalShellEnv()
+
+  if (payload?.env && typeof payload.env === 'object') {
+    for (const [key, value] of Object.entries(payload.env)) {
+      if (typeof key === 'string' && key) {
+        env[key] = String(value ?? '')
+      }
+    }
+  }
+
+  // shell:true runs the command through the platform shell so `npm test`,
+  // pipes, and built-ins work. On Windows that's cmd.exe; on POSIX, /bin/sh.
+  // detached on POSIX makes the child a process-group leader so we can kill the
+  // whole tree (the shell + everything it spawns, e.g. a dev server) on stop.
+  const child = spawn(command, {
+    cwd,
+    env,
+    shell: true,
+    windowsHide: true,
+    detached: !IS_WINDOWS
+  })
+
+  runSessions.set(id, { child, webContentsId: event.sender.id })
+
+  const send = (suffix, data) => {
+    if (event.sender.isDestroyed()) {
+      return
+    }
+
+    event.sender.send(runChannel(id, suffix), data)
+  }
+
+  child.stdout?.on('data', chunk => send('data', { stream: 'stdout', chunk: chunk.toString('utf8') }))
+  child.stderr?.on('data', chunk => send('data', { stream: 'stderr', chunk: chunk.toString('utf8') }))
+  child.on('error', err => {
+    send('data', { stream: 'stderr', chunk: `${err?.message || err}\n` })
+    runSessions.delete(id)
+    send('exit', { code: -1, signal: null })
+  })
+  child.on('close', (code, signal) => {
+    runSessions.delete(id)
+    send('exit', { code: typeof code === 'number' ? code : -1, signal: signal || null })
+  })
+
+  if (!event.sender[RUN_DESTROY_HOOK]) {
+    event.sender[RUN_DESTROY_HOOK] = true
+    const senderId = event.sender.id
+    event.sender.once('destroyed', () => {
+      for (const [sessionId, info] of [...runSessions.entries()]) {
+        if (info.webContentsId === senderId) {
+          disposeRunSession(sessionId)
+        }
+      }
+    })
+  }
+
+  return { id, cwd }
+})
+
+ipcMain.handle('hermes:run:stop', (_event, id) => disposeRunSession(String(id || '')))
 
 ipcMain.handle('hermes:updates:check', async () =>
   checkUpdates().catch(error => ({

@@ -78,6 +78,9 @@ function labelForToolWindow(id: ToolWindowId, t: ReturnType<typeof useI18n>['t']
     case 'browser':
       return t.toolWindows.browser
 
+    case 'run':
+      return t.toolWindows.run
+
     default:
       return t.toolWindows.files
   }

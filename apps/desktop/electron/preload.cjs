@@ -106,6 +106,22 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
       return () => ipcRenderer.removeListener(channel, listener)
     }
   },
+  run: {
+    start: options => ipcRenderer.invoke('hermes:run:start', options),
+    stop: id => ipcRenderer.invoke('hermes:run:stop', id),
+    onData: (id, callback) => {
+      const channel = `hermes:run:${id}:data`
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.on(channel, listener)
+      return () => ipcRenderer.removeListener(channel, listener)
+    },
+    onExit: (id, callback) => {
+      const channel = `hermes:run:${id}:exit`
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.on(channel, listener)
+      return () => ipcRenderer.removeListener(channel, listener)
+    }
+  },
   onClosePreviewRequested: callback => {
     const listener = () => callback()
     ipcRenderer.on('hermes:close-preview-requested', listener)

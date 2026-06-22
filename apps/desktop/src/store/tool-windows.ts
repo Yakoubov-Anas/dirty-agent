@@ -9,6 +9,7 @@ import {
   FILE_BROWSER_PANE_ID,
   GIT_COMMIT_PANE_ID,
   GIT_LOG_PANE_ID,
+  RUN_PANE_ID,
   TERMINAL_PANE_ID
 } from './layout'
 import { $paneStates, setPaneOpen, togglePane } from './panes'
@@ -27,6 +28,7 @@ export type ToolWindowId =
   | typeof GIT_LOG_PANE_ID
   | typeof DATABASE_PANE_ID
   | typeof BROWSER_PANE_ID
+  | typeof RUN_PANE_ID
 
 export interface ToolWindowPlacement {
   side: ToolWindowSide
@@ -53,6 +55,7 @@ export const TOOL_WINDOWS: readonly ToolWindowMeta[] = [
   { icon: 'files', id: FILE_BROWSER_PANE_ID },
   { icon: 'database', id: DATABASE_PANE_ID },
   { icon: 'globe', id: BROWSER_PANE_ID },
+  { icon: 'play', id: RUN_PANE_ID },
   { icon: 'terminal', id: TERMINAL_PANE_ID }
 ]
 
@@ -67,7 +70,8 @@ export const TOOL_WINDOW_DEFAULT_PLACEMENTS: Record<ToolWindowId, ToolWindowPlac
   [FILE_BROWSER_PANE_ID]: { order: 0, segment: 'top', side: 'right' },
   [TERMINAL_PANE_ID]: { order: 0, segment: 'bottom', side: 'left' },
   [DATABASE_PANE_ID]: { order: 1, segment: 'bottom', side: 'left' },
-  [BROWSER_PANE_ID]: { order: 1, segment: 'top', side: 'right' }
+  [BROWSER_PANE_ID]: { order: 1, segment: 'top', side: 'right' },
+  [RUN_PANE_ID]: { order: 2, segment: 'bottom', side: 'left' }
 }
 
 function defaultPlacement(id: ToolWindowId): ToolWindowPlacement {

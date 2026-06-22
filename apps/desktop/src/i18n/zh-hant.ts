@@ -162,6 +162,7 @@ export const zhHant = defineLocale({
     gitLog: '記錄',
     database: '資料庫',
     browser: '瀏覽器',
+    run: '執行',
     moveToLeft: '移到左側',
     moveToRight: '移到右側',
     moveToTop: '移到頂部',
@@ -285,6 +286,35 @@ export const zhHant = defineLocale({
     aiControlOff: 'AI 控制已關閉 — 點擊以允許代理操作此瀏覽器',
     empty: '未載入頁面',
     emptyHint: '在上方輸入網址開始瀏覽。'
+  },
+
+  run: {
+    title: '執行',
+    widgetTitle: '執行組態',
+    noConfig: '新增組態',
+    empty: '尚無執行組態。',
+    run: '執行',
+    stop: '停止',
+    rerun: '重新執行',
+    clear: '清除輸出',
+    noOutput: '尚無輸出。執行一個組態即可在此查看結果。',
+    addConfig: '新增組態…',
+    editConfig: '編輯',
+    deleteConfig: '刪除',
+    save: '儲存',
+    fieldName: '名稱',
+    fieldNamePlaceholder: '例如：執行測試',
+    fieldCommand: '命令',
+    fieldCommandPlaceholder: '例如：npm test',
+    fieldCwd: '工作目錄',
+    fieldCwdPlaceholder: '預設為專案目錄',
+    fieldEnv: '環境變數',
+    fieldEnvPlaceholder: 'KEY=value（每行一個）',
+    running: '執行中',
+    exited: '完成',
+    stopped: '已停止',
+    failed: '失敗',
+    idle: '閒置'
   },
 
   language: {

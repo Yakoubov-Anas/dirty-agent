@@ -122,6 +122,16 @@ declare global {
         start: (options?: { cols?: number; cwd?: string; rows?: number }) => Promise<HermesTerminalSession>
         write: (id: string, data: string) => Promise<boolean>
       }
+      run?: {
+        start: (options: {
+          command: string
+          cwd?: string
+          env?: Record<string, string>
+        }) => Promise<HermesRunSession>
+        stop: (id: string) => Promise<boolean>
+        onData: (id: string, callback: (payload: HermesRunData) => void) => () => void
+        onExit: (id: string, callback: (payload: HermesRunExit) => void) => () => void
+      }
       onClosePreviewRequested?: (callback: () => void) => () => void
       onOpenUpdatesRequested?: (callback: () => void) => () => void
       onDeepLink?: (
@@ -194,6 +204,21 @@ export interface HermesTerminalSession {
 
 export interface HermesTerminalExit {
   code: number | null
+  signal: string | null
+}
+
+export interface HermesRunSession {
+  id: string
+  cwd: string
+}
+
+export interface HermesRunData {
+  stream: 'stdout' | 'stderr'
+  chunk: string
+}
+
+export interface HermesRunExit {
+  code: number
   signal: string | null
 }
 

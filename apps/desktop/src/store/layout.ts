@@ -36,6 +36,7 @@ export const GIT_COMMIT_PANE_ID = 'git-commit'
 export const GIT_LOG_PANE_ID = 'git-log'
 export const DATABASE_PANE_ID = 'database'
 export const BROWSER_PANE_ID = 'browser'
+export const RUN_PANE_ID = 'run'
 export const RIGHT_RAIL_PREVIEW_TAB_ID = 'preview'
 
 export type RightRailTabId = typeof RIGHT_RAIL_PREVIEW_TAB_ID | `file:${string}` | `db:${string}`
@@ -47,6 +48,7 @@ ensurePaneRegistered(GIT_COMMIT_PANE_ID, { open: false })
 ensurePaneRegistered(GIT_LOG_PANE_ID, { open: false })
 ensurePaneRegistered(DATABASE_PANE_ID, { open: false })
 ensurePaneRegistered(BROWSER_PANE_ID, { open: false })
+ensurePaneRegistered(RUN_PANE_ID, { open: false })
 
 export const $sidebarOpen: ReadableAtom<boolean> = computed(
   $paneStates,

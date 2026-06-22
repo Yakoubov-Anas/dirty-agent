@@ -167,6 +167,7 @@ export const ja = defineLocale({
     gitLog: 'ログ',
     database: 'データベース',
     browser: 'ブラウザ',
+    run: '実行',
     moveToLeft: '左へ移動',
     moveToRight: '右へ移動',
     moveToTop: '上へ移動',
@@ -290,6 +291,35 @@ export const ja = defineLocale({
     aiControlOff: 'AI制御オフ — クリックでエージェントの操作を許可',
     empty: 'ページが読み込まれていません',
     emptyHint: '上に URL を入力して閲覧を開始します。'
+  },
+
+  run: {
+    title: '実行',
+    widgetTitle: '実行構成',
+    noConfig: '構成を追加',
+    empty: '実行構成がまだありません。',
+    run: '実行',
+    stop: '停止',
+    rerun: '再実行',
+    clear: '出力をクリア',
+    noOutput: 'まだ出力がありません。構成を実行すると結果がここに表示されます。',
+    addConfig: '構成を追加…',
+    editConfig: '編集',
+    deleteConfig: '削除',
+    save: '保存',
+    fieldName: '名前',
+    fieldNamePlaceholder: '例: テストを実行',
+    fieldCommand: 'コマンド',
+    fieldCommandPlaceholder: '例: npm test',
+    fieldCwd: '作業ディレクトリ',
+    fieldCwdPlaceholder: 'デフォルトはプロジェクトディレクトリ',
+    fieldEnv: '環境変数',
+    fieldEnvPlaceholder: 'KEY=value（1行に1つ）',
+    running: '実行中',
+    exited: '完了',
+    stopped: '停止済み',
+    failed: '失敗',
+    idle: '待機中'
   },
 
   language: {

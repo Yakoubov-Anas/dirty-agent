@@ -180,6 +180,7 @@ export interface Translations {
     gitLog: string
     database: string
     browser: string
+    run: string
     moveToLeft: string
     moveToRight: string
     moveToTop: string
@@ -303,6 +304,35 @@ export interface Translations {
     aiControlOff: string
     empty: string
     emptyHint: string
+  }
+
+  run: {
+    title: string
+    widgetTitle: string
+    noConfig: string
+    empty: string
+    run: string
+    stop: string
+    rerun: string
+    clear: string
+    noOutput: string
+    addConfig: string
+    editConfig: string
+    deleteConfig: string
+    save: string
+    fieldName: string
+    fieldNamePlaceholder: string
+    fieldCommand: string
+    fieldCommandPlaceholder: string
+    fieldCwd: string
+    fieldCwdPlaceholder: string
+    fieldEnv: string
+    fieldEnvPlaceholder: string
+    running: string
+    exited: string
+    stopped: string
+    failed: string
+    idle: string
   }
 
   keybinds: {
