@@ -1,6 +1,17 @@
 # Auto-generated files — collapse diffs and exclude from language stats
 web/package-lock.json linguist-generated=true
 
+# Normalize ALL text files to LF in the repo AND the working tree. This makes
+# line endings independent of each machine's core.autocrlf, so a checkout shared
+# between a Windows and a WSL git (different autocrlf defaults) no longer shows
+# the whole tree as "modified". Binary files are auto-detected and left alone.
+* text=auto eol=lf
+
+# Windows-only scripts must keep CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
 # Enforce LF for scripts that run inside Linux containers.
 # Without this, Windows checkout converts to CRLF and breaks `exec` in the
 # container entrypoint with "no such file or directory".
