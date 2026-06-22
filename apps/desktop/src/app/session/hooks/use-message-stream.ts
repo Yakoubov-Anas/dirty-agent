@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { type MutableRefObject, useCallback, useEffect, useRef } from 'react'
 
+import { handleBrowserControlRequest } from '@/app/browser/browser-control-handler'
 import { readActiveTerminal } from '@/app/right-sidebar/terminal/buffer'
 import { translateNow } from '@/i18n'
 import {
@@ -724,6 +725,16 @@ export function useMessageStream({
       const isActiveEvent = !!sessionId && sessionId === activeSessionIdRef.current
 
       if (event.type === 'gateway.ready') {
+        return
+      } else if (event.type === 'browser_control.request') {
+        // The agent's browser_pane tool asked to act on the desktop's embedded
+        // Browser webview. The Python side is blocked on browser_control.respond
+        // (tui_gateway/server.py:_block), so this MUST always reply — the handler
+        // gates on the user's AI-control toggle and replies with an error result
+        // when control is off or the panel is closed. Not session-scoped: there
+        // is a single shared Browser tool window.
+        void handleBrowserControlRequest(payload, $gateway.get())
+
         return
       } else if (event.type === 'session.info') {
         // Apply session-scoped fields when the event targets the active

@@ -47,6 +47,9 @@ _HERMES_CORE_TOOLS = [
     "browser_type", "browser_scroll", "browser_back",
     "browser_press", "browser_get_images",
     "browser_vision", "browser_console", "browser_cdp", "browser_dialog",
+    # Drive the desktop GUI's embedded Browser webview (gated on HERMES_DESKTOP
+    # via check_fn in tools/browser_pane_tool.py — hidden outside the GUI).
+    "browser_pane",
     # Text-to-speech
     "text_to_speech",
     # Planning & memory
@@ -177,6 +180,12 @@ TOOLSETS = {
             "browser_vision", "browser_console", "browser_cdp",
             "browser_dialog", "web_search"
         ],
+        "includes": []
+    },
+
+    "browser-pane": {
+        "description": "Drive the desktop GUI's embedded Browser tool window (the same browser the user sees, sharing their login). Desktop-only; gated on HERMES_DESKTOP.",
+        "tools": ["browser_pane"],
         "includes": []
     },
     

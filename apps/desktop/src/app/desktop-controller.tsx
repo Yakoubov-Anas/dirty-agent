@@ -28,6 +28,7 @@ import { $dbRailTabs } from '../store/database'
 import {
   $pinnedSessionIds,
   $sessionsLimit,
+  BROWSER_PANE_ID,
   bumpSessionsLimit,
   CHAT_SIDEBAR_PANE_ID,
   DATABASE_PANE_ID,
@@ -94,6 +95,7 @@ import { $toolWindowSegment, $toolWindowSide } from '../store/tool-windows'
 import { openUpdatesWindow, startUpdatePoller, stopUpdatePoller } from '../store/updates'
 import { isSecondaryWindow } from '../store/windows'
 
+import { BrowserPane } from './browser/browser-pane'
 import { ChatView } from './chat'
 import { requestComposerFocus, requestComposerInsert } from './chat/composer/focus'
 import { useComposerActions } from './chat/hooks/use-composer-actions'
@@ -236,6 +238,7 @@ export function DesktopController() {
   const gitSide = useStore($toolWindowSide(GIT_COMMIT_PANE_ID))
   const gitLogSide = useStore($toolWindowSide(GIT_LOG_PANE_ID))
   const databaseSide = useStore($toolWindowSide(DATABASE_PANE_ID))
+  const browserSide = useStore($toolWindowSide(BROWSER_PANE_ID))
   // Segments decide dock vs side-column placement for each relocatable panel.
   const sidebarSegment = useStore($toolWindowSegment(CHAT_SIDEBAR_PANE_ID))
   const railSegment = useStore($toolWindowSegment(FILE_BROWSER_PANE_ID))
@@ -243,6 +246,7 @@ export function DesktopController() {
   const gitSegment = useStore($toolWindowSegment(GIT_COMMIT_PANE_ID))
   const gitLogSegment = useStore($toolWindowSegment(GIT_LOG_PANE_ID))
   const databaseSegment = useStore($toolWindowSegment(DATABASE_PANE_ID))
+  const browserSegment = useStore($toolWindowSegment(BROWSER_PANE_ID))
   // Open-sequence per pane → column order within a side (recent = near editor).
   const paneOpenSeq = useStore($paneOpenSeq)
   const profileScope = useStore($profileScope)
@@ -1249,6 +1253,25 @@ export function DesktopController() {
       </Pane>
     ) : null
 
+  const browserContent = <BrowserPane />
+
+  const browserPane =
+    !isSecondaryWindow() && browserSegment === 'top' ? (
+      <Pane
+        defaultOpen={false}
+        disabled={!chatOpen}
+        id={BROWSER_PANE_ID}
+        key={BROWSER_PANE_ID}
+        maxWidth="60rem"
+        minWidth="22rem"
+        resizable
+        side={browserSide}
+        width="32rem"
+      >
+        {browserContent}
+      </Pane>
+    ) : null
+
   // Tool windows dock by side; order within a side runs from the window edge
   // inward to main. Rank = distance from main. We derive it from the open
   // SEQUENCE so the most-recently-opened panel sits closest to the editor
@@ -1262,6 +1285,7 @@ export function DesktopController() {
     { node: gitCommitPane, rank: rankFor(GIT_COMMIT_PANE_ID), side: gitSide },
     { node: gitLogPane, rank: rankFor(GIT_LOG_PANE_ID), side: gitLogSide },
     { node: databasePane, rank: rankFor(DATABASE_PANE_ID), side: databaseSide },
+    { node: browserPane, rank: rankFor(BROWSER_PANE_ID), side: browserSide },
     { node: fileBrowserPane, rank: rankFor(FILE_BROWSER_PANE_ID), side: railSide },
     { node: previewPane, rank: rankFor(FILE_BROWSER_PANE_ID) - 0.5, side: railSide },
     { node: terminalPane, rank: rankFor(TERMINAL_PANE_ID), side: terminalSide }
@@ -1297,6 +1321,12 @@ export function DesktopController() {
           id: DATABASE_PANE_ID,
           label: t.toolWindows.database,
           side: databaseSide
+        },
+        browserSegment === 'bottom' && {
+          content: browserContent,
+          id: BROWSER_PANE_ID,
+          label: t.toolWindows.browser,
+          side: browserSide
         },
         railSegment === 'bottom' && {
           content: fileBrowserContent,

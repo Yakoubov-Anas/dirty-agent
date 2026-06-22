@@ -179,6 +179,7 @@ export interface Translations {
     git: string
     gitLog: string
     database: string
+    browser: string
     moveToLeft: string
     moveToRight: string
     moveToTop: string
@@ -284,6 +285,24 @@ export interface Translations {
     rowsInfo: (rows: string, ms: string) => string
     statementOk: (rows: string) => string
     filteredCount: (shown: string, total: string) => string
+  }
+
+  browser: {
+    aria: string
+    title: string
+    urlPlaceholder: string
+    back: string
+    forward: string
+    reload: string
+    stop: string
+    home: string
+    openExternal: string
+    pickElement: string
+    pickCancel: string
+    aiControlOn: string
+    aiControlOff: string
+    empty: string
+    emptyHint: string
   }
 
   keybinds: {

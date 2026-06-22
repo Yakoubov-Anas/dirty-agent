@@ -162,6 +162,7 @@ export const zh: Translations = {
     git: '提交',
     gitLog: '日志',
     database: '数据库',
+    browser: '浏览器',
     moveToLeft: '移到左侧',
     moveToRight: '移到右侧',
     moveToTop: '移到顶部',
@@ -267,6 +268,24 @@ export const zh: Translations = {
     rowsInfo: (rows, ms) => `${rows} 行 · ${ms} 毫秒`,
     statementOk: rows => `完成 — 影响了 ${rows} 行。`,
     filteredCount: (shown, total) => `${shown} / ${total}`
+  },
+
+  browser: {
+    aria: '浏览器',
+    title: '浏览器',
+    urlPlaceholder: '输入网址或搜索',
+    back: '后退',
+    forward: '前进',
+    reload: '重新加载',
+    stop: '停止',
+    home: '主页',
+    openExternal: '在系统浏览器中打开',
+    pickElement: '选择元素并发送到聊天',
+    pickCancel: '取消选择元素',
+    aiControlOn: 'AI 控制已开启 — 智能体可操作此浏览器',
+    aiControlOff: 'AI 控制已关闭 — 点击以允许智能体操作此浏览器',
+    empty: '未加载页面',
+    emptyHint: '在上方输入网址开始浏览。'
   },
 
   keybinds: {

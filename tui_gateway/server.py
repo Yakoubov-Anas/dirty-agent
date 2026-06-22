@@ -1387,6 +1387,34 @@ def _cwd_for_session_key(session_key: str) -> str:
     return ""
 
 
+def _sid_for_session_key(session_key: str) -> str:
+    """Reverse-map a tool's ``task_id`` (== session_key) to the ``_sessions`` key
+    (``sid``) that ``_emit``/``write_json`` route events by. They are different
+    ids (see session.create), so a tool that wants to push an event to its own
+    desktop session must translate first.
+    """
+    if not session_key:
+        return ""
+    with _sessions_lock:
+        for sid, sess in _sessions.items():
+            if sess.get("session_key") == session_key:
+                return sid
+    return ""
+
+
+def browser_control_request(session_key: str, action: str, params: dict, timeout: int = 30) -> str:
+    """Ask the desktop to run a browser action on its embedded Browser webview and
+    block until it replies. Returns the raw JSON result string from the desktop
+    (empty string on timeout / no desktop session). Used by the ``browser_pane``
+    tool — see tools/browser_pane_tool.py.
+    """
+    sid = _sid_for_session_key(session_key)
+    if not sid:
+        return ""
+    payload = {"action": action, "params": params or {}}
+    return _block("browser_control.request", sid, payload, timeout=timeout)
+
+
 def _set_session_context(session_key: str, cwd: str | None = None) -> list:
     try:
         from gateway.session_context import set_session_vars
@@ -7542,6 +7570,13 @@ def _(rid, params: dict) -> dict:
 @method("secret.respond")
 def _(rid, params: dict) -> dict:
     return _respond(rid, params, "value")
+
+
+@method("browser_control.respond")
+def _(rid, params: dict) -> dict:
+    # `result` is a JSON string of the browser action outcome (the desktop ran
+    # it on the embedded Browser webview). Empty when AI control is off/denied.
+    return _respond(rid, params, "result")
 
 
 @method("approval.respond")

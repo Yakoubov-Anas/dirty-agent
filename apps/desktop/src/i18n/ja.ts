@@ -166,6 +166,7 @@ export const ja = defineLocale({
     git: 'コミット',
     gitLog: 'ログ',
     database: 'データベース',
+    browser: 'ブラウザ',
     moveToLeft: '左へ移動',
     moveToRight: '右へ移動',
     moveToTop: '上へ移動',
@@ -271,6 +272,24 @@ export const ja = defineLocale({
     rowsInfo: (rows, ms) => `${rows} 行 · ${ms} ms`,
     statementOk: rows => `完了 — ${rows} 行に影響しました。`,
     filteredCount: (shown, total) => `${shown} / ${total}`
+  },
+
+  browser: {
+    aria: 'ブラウザ',
+    title: 'ブラウザ',
+    urlPlaceholder: 'URL を入力または検索',
+    back: '戻る',
+    forward: '進む',
+    reload: '再読み込み',
+    stop: '停止',
+    home: 'ホーム',
+    openExternal: 'システムブラウザで開く',
+    pickElement: '要素を選択してチャットに送信',
+    pickCancel: '要素の選択をキャンセル',
+    aiControlOn: 'AI制御オン — エージェントがこのブラウザを操作できます',
+    aiControlOff: 'AI制御オフ — クリックでエージェントの操作を許可',
+    empty: 'ページが読み込まれていません',
+    emptyHint: '上に URL を入力して閲覧を開始します。'
   },
 
   language: {

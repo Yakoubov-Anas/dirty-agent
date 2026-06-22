@@ -3,6 +3,7 @@ import { atom, computed, type ReadableAtom } from 'nanostores'
 import { persistBoolean, storedBoolean } from '@/lib/storage'
 
 import {
+  BROWSER_PANE_ID,
   CHAT_SIDEBAR_PANE_ID,
   DATABASE_PANE_ID,
   FILE_BROWSER_PANE_ID,
@@ -25,6 +26,7 @@ export type ToolWindowId =
   | typeof GIT_COMMIT_PANE_ID
   | typeof GIT_LOG_PANE_ID
   | typeof DATABASE_PANE_ID
+  | typeof BROWSER_PANE_ID
 
 export interface ToolWindowPlacement {
   side: ToolWindowSide
@@ -50,6 +52,7 @@ export const TOOL_WINDOWS: readonly ToolWindowMeta[] = [
   { icon: 'git-branch', id: GIT_LOG_PANE_ID },
   { icon: 'files', id: FILE_BROWSER_PANE_ID },
   { icon: 'database', id: DATABASE_PANE_ID },
+  { icon: 'globe', id: BROWSER_PANE_ID },
   { icon: 'terminal', id: TERMINAL_PANE_ID }
 ]
 
@@ -63,7 +66,8 @@ export const TOOL_WINDOW_DEFAULT_PLACEMENTS: Record<ToolWindowId, ToolWindowPlac
   [GIT_LOG_PANE_ID]: { order: 2, segment: 'top', side: 'left' },
   [FILE_BROWSER_PANE_ID]: { order: 0, segment: 'top', side: 'right' },
   [TERMINAL_PANE_ID]: { order: 0, segment: 'bottom', side: 'left' },
-  [DATABASE_PANE_ID]: { order: 1, segment: 'bottom', side: 'left' }
+  [DATABASE_PANE_ID]: { order: 1, segment: 'bottom', side: 'left' },
+  [BROWSER_PANE_ID]: { order: 1, segment: 'top', side: 'right' }
 }
 
 function defaultPlacement(id: ToolWindowId): ToolWindowPlacement {

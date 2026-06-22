@@ -14,7 +14,8 @@ const {
   safeStorage,
   session,
   shell,
-  systemPreferences
+  systemPreferences,
+  webContents
 } = require('electron')
 const crypto = require('node:crypto')
 const fs = require('node:fs')
@@ -5869,6 +5870,42 @@ ipcMain.handle('hermes:saveImageBuffer', async (_event, payload) => {
 
   const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data)
   return writeComposerImage(buffer, payload?.ext || '.png')
+})
+
+// Screenshot a <webview>'s page (or an optional CSS-pixel rect) FROM THE MAIN
+// PROCESS. Calling <webview>.capturePage() in the renderer can hard-crash the
+// renderer; doing it here via webContents.fromId(id) is safe. The renderer
+// passes webview.getWebContentsId(). Returns a saved PNG path ('' on failure).
+ipcMain.handle('hermes:browser:capture', async (_event, payload) => {
+  const id = Number(payload?.id)
+  if (!Number.isInteger(id)) throw new Error('browser:capture: missing webContents id')
+
+  const wc = webContents.fromId(id)
+  if (!wc || wc.isDestroyed()) {
+    return ''
+  }
+
+  const rect = payload?.rect
+  const valid =
+    rect &&
+    [rect.x, rect.y, rect.width, rect.height].every(n => typeof n === 'number' && Number.isFinite(n)) &&
+    rect.width > 0 &&
+    rect.height > 0
+
+  const image = valid
+    ? await wc.capturePage({
+        x: Math.max(0, Math.round(rect.x)),
+        y: Math.max(0, Math.round(rect.y)),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height)
+      })
+    : await wc.capturePage()
+
+  if (!image || image.isEmpty()) {
+    return ''
+  }
+
+  return writeComposerImage(image.toPNG(), '.png')
 })
 
 ipcMain.handle('hermes:saveClipboardImage', async () => {

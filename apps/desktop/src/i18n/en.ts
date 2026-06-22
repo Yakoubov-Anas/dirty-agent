@@ -166,6 +166,7 @@ export const en: Translations = {
     git: 'Commit',
     gitLog: 'Log',
     database: 'Database',
+    browser: 'Browser',
     moveToLeft: 'Move to left',
     moveToRight: 'Move to right',
     moveToTop: 'Move to top',
@@ -271,6 +272,24 @@ export const en: Translations = {
     rowsInfo: (rows, ms) => `${rows} rows · ${ms} ms`,
     statementOk: rows => `Done — ${rows} rows affected.`,
     filteredCount: (shown, total) => `${shown} / ${total}`
+  },
+
+  browser: {
+    aria: 'Browser',
+    title: 'Browser',
+    urlPlaceholder: 'Enter URL or search',
+    back: 'Back',
+    forward: 'Forward',
+    reload: 'Reload',
+    stop: 'Stop',
+    home: 'Home',
+    openExternal: 'Open in system browser',
+    pickElement: 'Pick element to send to chat',
+    pickCancel: 'Cancel element pick',
+    aiControlOn: 'AI control on — the agent can drive this browser',
+    aiControlOff: 'AI control off — click to let the agent drive this browser',
+    empty: 'No page loaded',
+    emptyHint: 'Type a URL above to start browsing.'
   },
 
   keybinds: {

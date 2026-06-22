@@ -161,6 +161,7 @@ export const zhHant = defineLocale({
     git: '提交',
     gitLog: '記錄',
     database: '資料庫',
+    browser: '瀏覽器',
     moveToLeft: '移到左側',
     moveToRight: '移到右側',
     moveToTop: '移到頂部',
@@ -266,6 +267,24 @@ export const zhHant = defineLocale({
     rowsInfo: (rows, ms) => `${rows} 列 · ${ms} 毫秒`,
     statementOk: rows => `完成 — 影響了 ${rows} 列。`,
     filteredCount: (shown, total) => `${shown} / ${total}`
+  },
+
+  browser: {
+    aria: '瀏覽器',
+    title: '瀏覽器',
+    urlPlaceholder: '輸入網址或搜尋',
+    back: '上一頁',
+    forward: '下一頁',
+    reload: '重新載入',
+    stop: '停止',
+    home: '首頁',
+    openExternal: '在系統瀏覽器中開啟',
+    pickElement: '選擇元素並傳送到聊天',
+    pickCancel: '取消選擇元素',
+    aiControlOn: 'AI 控制已開啟 — 代理可操作此瀏覽器',
+    aiControlOff: 'AI 控制已關閉 — 點擊以允許代理操作此瀏覽器',
+    empty: '未載入頁面',
+    emptyHint: '在上方輸入網址開始瀏覽。'
   },
 
   language: {
