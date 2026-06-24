@@ -623,6 +623,14 @@ export interface Translations {
       removedMessage: (provider: string) => string
       failedRemove: (provider: string) => string
       noProviderKeys: string
+    customEndpoints: string
+    customEndpointsIntro: string
+    editEndpoint: string
+    transportAuto: string
+    modelCount: (count: string) => string
+    removeEndpointTitle: string
+    removeEndpointConfirm: (name: string) => string
+    endpointRemoved: (name: string) => string
       loading: string
     }
     sessions: {
@@ -1270,6 +1278,17 @@ export interface Translations {
     replaceCurrent: string
     pasteApiKey: string
     localApiKeyPlaceholder: string
+    endpointNamePlaceholder: string
+    transportLabel: string
+    transportAuto: string
+    transportChat: string
+    transportAnthropic: string
+    transportResponses: string
+    modelsLabel: string
+    modelsPlaceholder: string
+    modelsHint: string
+    forceOauthLabel: string
+    forceOauthHint: string
     couldNotSave: string
     connecting: string
     update: string

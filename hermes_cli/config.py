@@ -4168,6 +4168,70 @@ def get_compatible_custom_providers(
     return compatible
 
 
+def remove_custom_provider(
+    *,
+    name: str = "",
+    provider_key: str = "",
+    config: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """Remove a saved custom provider from BOTH config schemas by name or map key.
+
+    ``name`` matches the entry's ``name`` field (case-insensitive) or the
+    ``providers:`` map key. ``provider_key`` matches the map key only.
+    Returns True if anything was removed.
+    """
+    if config is None:
+        config = load_config()
+
+    def _norm(value: str) -> str:
+        return str(value or "").strip().lower()
+
+    target_name = _norm(name)
+    target_key = _norm(provider_key)
+
+    if not target_name and not target_key:
+        return False
+
+    removed = False
+
+    def _entry_matches(key: str, entry: Dict[str, Any]) -> bool:
+        key_norm = _norm(key)
+        if target_name:
+            if key_norm == target_name:
+                return True
+            if isinstance(entry, dict) and _norm(entry.get("name", "")) == target_name:
+                return True
+        if target_key and key_norm == target_key:
+            return True
+        return False
+
+    # Legacy custom_providers: list (no map key — match on name field only).
+    legacy = config.get("custom_providers")
+    if isinstance(legacy, list):
+        kept = [e for e in legacy if not (isinstance(e, dict) and _entry_matches("", e))]
+        if len(kept) < len(legacy):
+            removed = True
+            if kept:
+                config["custom_providers"] = kept
+            else:
+                config.pop("custom_providers", None)
+
+    # v12+ providers: map (keyed).
+    providers_map = config.get("providers")
+    if isinstance(providers_map, dict):
+        drop_keys = [k for k, e in providers_map.items() if _entry_matches(k, e)]
+        for key in drop_keys:
+            providers_map.pop(key, None)
+            removed = True
+        if not providers_map:
+            config.pop("providers", None)
+
+    if removed:
+        save_config(config)
+
+    return removed
+
+
 def get_custom_provider_context_length(
     model: str,
     base_url: str,

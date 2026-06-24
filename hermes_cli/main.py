@@ -3644,43 +3644,96 @@ def _custom_provider_base_url_config_value(provider_info, resolved_base_url=""):
 
 
 def _save_custom_provider(
-    base_url, api_key="", model="", context_length=None, name=None, api_mode=None
+    base_url, api_key="", model="", context_length=None, name=None, api_mode=None, models=None, force_oauth=None, original_name=None
 ):
     """Save a custom endpoint to custom_providers in config.yaml.
 
-    Deduplicates by base_url — if the URL already exists, updates the
-    model name, context_length, and api_mode but doesn't add a duplicate entry.
-    Uses *name* when provided, otherwise auto-generates from the URL.
+    Deduplicates by NAME (normalized) when a *name* is supplied — so two entries
+    can share the same ``base_url`` (e.g. one chat_completions, one
+    anthropic_messages) as long as they have different names. When no name is
+    given, falls back to base_url dedup (legacy behavior). Updates the matched
+    entry in place; otherwise appends a new one.
+
+    *models* (optional) is the explicit list of model ids the endpoint serves;
+    when given, all are registered under the provider's ``models`` map and the
+    first becomes the default model.
+
+    *force_oauth* (optional tri-state): True persists ``force_oauth: true`` on the
+    entry (opt the endpoint into Claude Code OAuth adaptation); False removes it;
+    None leaves any existing value untouched.
     """
     from hermes_cli.config import load_config, save_config
+
+    model_list = [m for m in (models or []) if isinstance(m, str) and m.strip()]
+    if model_list and not model:
+        model = model_list[0]
+
+    def _models_map(existing=None):
+        out = dict(existing) if isinstance(existing, dict) else {}
+        for mid in model_list:
+            if mid not in out:
+                out[mid] = {}
+        if model and context_length:
+            entry_cfg = out.get(model)
+            out[model] = {**(entry_cfg if isinstance(entry_cfg, dict) else {}), "context_length": context_length}
+        return out
 
     cfg = load_config()
     providers = cfg.get("custom_providers") or []
     if not isinstance(providers, list):
         providers = []
 
-    # Check if this URL is already saved — update model/context_length if so
+    target_name_norm = (name or "").strip().lower()
+    # When the caller supplies an original_name (edit/rename), use it as the
+    # lookup key so the existing entry is found and updated in place rather than
+    # a duplicate being created under the new name.
+    lookup_name_norm = (original_name or name or "").strip().lower()
+    target_url_norm = base_url.rstrip("/")
+
+    def _matches(entry):
+        if not isinstance(entry, dict):
+            return False
+        if lookup_name_norm:
+            return str(entry.get("name", "")).strip().lower() == lookup_name_norm
+        return str(entry.get("base_url", "")).rstrip("/") == target_url_norm
+
+    # Update the matched entry in place (by name when given, else by URL).
     for entry in providers:
-        if isinstance(entry, dict) and entry.get("base_url", "").rstrip(
-            "/"
-        ) == base_url.rstrip("/"):
+        if _matches(entry):
             changed = False
+            if base_url and entry.get("base_url", "").rstrip("/") != target_url_norm:
+                entry["base_url"] = base_url
+                changed = True
+            # Rename: update the name field when a new name was supplied.
+            if name and entry.get("name") != name:
+                entry["name"] = name
+                changed = True
+            if api_key and entry.get("api_key") != api_key:
+                entry["api_key"] = api_key
+                changed = True
             if model and entry.get("model") != model:
                 entry["model"] = model
                 changed = True
-            if model and context_length:
+            if model_list or (model and context_length):
                 models_cfg = entry.get("models", {})
                 if not isinstance(models_cfg, dict):
                     models_cfg = {}
-                models_cfg[model] = {"context_length": context_length}
-                entry["models"] = models_cfg
-                changed = True
+                merged = _models_map(models_cfg)
+                if merged != models_cfg:
+                    entry["models"] = merged
+                    changed = True
             if api_mode:
                 if entry.get("api_mode") != api_mode:
                     entry["api_mode"] = api_mode
                     changed = True
             elif "api_mode" in entry:
                 entry.pop("api_mode", None)
+                changed = True
+            if force_oauth is True and not entry.get("force_oauth"):
+                entry["force_oauth"] = True
+                changed = True
+            elif force_oauth is False and "force_oauth" in entry:
+                entry.pop("force_oauth", None)
                 changed = True
             if changed:
                 cfg["custom_providers"] = providers
@@ -3698,8 +3751,10 @@ def _save_custom_provider(
         entry["model"] = model
     if api_mode:
         entry["api_mode"] = api_mode
-    if model and context_length:
-        entry["models"] = {model: {"context_length": context_length}}
+    if force_oauth is True:
+        entry["force_oauth"] = True
+    if model_list or (model and context_length):
+        entry["models"] = _models_map()
 
     providers.append(entry)
     cfg["custom_providers"] = providers

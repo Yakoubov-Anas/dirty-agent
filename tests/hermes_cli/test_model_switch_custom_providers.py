@@ -612,13 +612,14 @@ def test_lmstudio_picker_skips_probe_when_not_configured(monkeypatch):
 
 
 def test_custom_providers_uses_live_models_for_multi_model_endpoint(monkeypatch):
-    """Custom providers with api_key + base_url should prefer live /models.
+    """Custom providers with an explicit ``models:`` list keep that list even
+    when an ``api_key`` is present.
 
-    Custom providers (section 4 of list_authenticated_providers) point at
-    gateways like Bifrost that expose hundreds of models.  Reading only the
-    static ``models:`` dict from config.yaml leaves the /model picker with
-    a stale subset.  Live discovery fills the picker with all available
-    models from the endpoint.
+    Explicit models in config.yaml are authoritative — if a user pins a subset,
+    that subset is what appears in the picker. Live discovery only fires when
+    no explicit list was provided (so a bare custom provider with just api_key +
+    base_url still gets a live catalog). Use ``discover_models: true`` together
+    with an empty ``models:`` to force live discovery regardless.
     """
     monkeypatch.setattr("agent.models_dev.fetch_models_dev", lambda: {})
     monkeypatch.setattr("hermes_cli.providers.HERMES_OVERLAYS", {})
@@ -661,15 +662,13 @@ def test_custom_providers_uses_live_models_for_multi_model_endpoint(monkeypatch)
     )
 
     assert gateway_prov is not None, "Custom provider group not found in results"
-    assert calls == [("sk-gateway-key", "https://gateway.example.com/v1")], (
-        "fetch_api_models must be called with the custom provider's credentials"
-    )
+    # fetch_api_models must NOT be called — explicit models take priority.
+    assert calls == [], "fetch_api_models must not fire when explicit models are configured"
     assert gateway_prov["models"] == [
         "gateway-model-a",
         "gateway-model-b",
-        "gateway-model-c",
-    ], "Live models must replace the static subset"
-    assert gateway_prov["total_models"] == 3
+    ], "Explicit models must be preserved, not replaced by live discovery"
+    assert gateway_prov["total_models"] == 2
 
 
 def test_custom_providers_discover_models_false_keeps_explicit_subset(monkeypatch):

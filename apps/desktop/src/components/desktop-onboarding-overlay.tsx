@@ -8,6 +8,7 @@ import { Codicon } from '@/components/ui/codicon'
 import { ErrorIcon } from '@/components/ui/error-state'
 import { Input } from '@/components/ui/input'
 import { Loader } from '@/components/ui/loader'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getGlobalModelOptions } from '@/hermes'
 import { useI18n } from '@/i18n'
 import {
@@ -34,6 +35,7 @@ import {
   DEFAULT_MANUAL_ONBOARDING_REASON,
   DEFAULT_ONBOARDING_REASON,
   dismissFirstRunOnboarding,
+  getLocalEndpointEditSeq,
   type OnboardingContext,
   type OnboardingFlow,
   peekPendingProviderOAuth,
@@ -44,7 +46,8 @@ import {
   setOnboardingMode,
   setOnboardingModel,
   startProviderOAuth,
-  submitOnboardingCode
+  submitOnboardingCode,
+  takeLocalEndpointPrefill
 } from '@/store/onboarding'
 import type { ModelOptionProvider, OAuthProvider } from '@/types/hermes'
 
@@ -343,7 +346,7 @@ export function DesktopOnboardingOverlay({ enabled, onCompleted, requestGateway 
           {reason ? <ReasonNotice reason={reason} /> : null}
           {ready ? (
             showPicker ? (
-              <Picker ctx={ctx} />
+              <Picker ctx={ctx} key={`picker-${getLocalEndpointEditSeq()}`} />
             ) : (
               <FlowPanel ctx={ctx} flow={flow} leaving={leaving} onBegin={finalizeOnboarding} />
             )
@@ -432,6 +435,9 @@ export function Picker({ ctx }: { ctx: OnboardingContext }) {
   const { t } = useI18n()
   const { localEndpoint, manual, mode, providers } = useStore($desktopOnboarding)
   const [showAll, setShowAll] = useState(readShowAll)
+  // Capture any edit-prefill once when the local-endpoint form opens (one-shot
+  // hand-off from the Providers settings "Edit" button).
+  const [localPrefill] = useState(() => (localEndpoint ? takeLocalEndpointPrefill() : null))
   const ordered = useMemo(() => (providers ? sortProviders(providers) : []), [providers])
   const hasOauth = ordered.length > 0
   const apiKeyOptions = useApiKeyCatalog()
@@ -457,8 +463,11 @@ export function Picker({ ctx }: { ctx: OnboardingContext }) {
         <ApiKeyForm
           canGoBack={hasOauth && !localEndpoint}
           initialEnvKey={localEndpoint ? 'OPENAI_BASE_URL' : undefined}
+          initialLocalEndpoint={localPrefill ?? undefined}
           onBack={() => setOnboardingMode('oauth')}
-          onSave={(envKey, value, name, apiKey) => saveOnboardingApiKey(envKey, value, name, ctx, apiKey)}
+          onSave={(envKey, value, name, apiKey, endpointOptions) =>
+            saveOnboardingApiKey(envKey, value, name, ctx, apiKey, endpointOptions)
+          }
           options={apiKeyOptions}
         />
         {manual ? null : (
@@ -643,6 +652,7 @@ export function ProviderRow({
 export function ApiKeyForm({
   canGoBack,
   initialEnvKey,
+  initialLocalEndpoint,
   isSet,
   onBack,
   onClear,
@@ -654,6 +664,9 @@ export function ApiKeyForm({
   /** Preselect a specific option by env key (e.g. 'OPENAI_BASE_URL' to land on
    *  the local / custom endpoint form). Falls back to the first option. */
   initialEnvKey?: string
+  /** Prefill the local / custom endpoint fields when editing an existing custom
+   *  provider. Only used with initialEnvKey='OPENAI_BASE_URL'. */
+  initialLocalEndpoint?: { baseUrl: string; apiMode?: string; models?: string[]; name?: string; originalName?: string; forceOauth?: boolean }
   isSet?: (envKey: string) => boolean
   onBack: () => void
   onClear?: (envKey: string) => void
@@ -661,7 +674,8 @@ export function ApiKeyForm({
     envKey: string,
     value: string,
     name: string,
-    apiKey?: string
+    apiKey?: string,
+    endpointOptions?: { apiMode?: string; models?: string[]; name?: string; forceOauth?: boolean }
   ) => Promise<{ message?: string; ok: boolean }>
   options?: ApiKeyOption[]
   redactedValue?: (envKey: string) => null | string | undefined
@@ -672,10 +686,23 @@ export function ApiKeyForm({
     () => options.find(o => o.envKey === initialEnvKey) ?? options[0]
   )
 
-  const [value, setValue] = useState('')
+  const [value, setValue] = useState(() =>
+    initialEnvKey === 'OPENAI_BASE_URL' ? (initialLocalEndpoint?.baseUrl ?? '') : ''
+  )
+
   // Optional endpoint API key, only used by the local / custom endpoint option
   // (whose `value` is the base URL). Cleared whenever the option changes.
   const [localKey, setLocalKey] = useState('')
+  // Local-endpoint transport (api_mode) + optional explicit model list.
+  const [transport, setTransport] = useState(() => initialLocalEndpoint?.apiMode || 'auto')
+  const [modelsText, setModelsText] = useState(() => (initialLocalEndpoint?.models ?? []).join(', '))
+  const [endpointName, setEndpointName] = useState(() => initialLocalEndpoint?.name ?? '')
+  // Locked to the name the endpoint HAD when the form opened — used as the
+  // lookup key so a rename updates in place instead of creating a new entry.
+  const [originalEndpointName] = useState(() => initialLocalEndpoint?.originalName ?? initialLocalEndpoint?.name ?? '')
+  // Force Claude Code OAuth adaptation (identity prefix + mcp__ tool names) for
+  // an anthropic_messages endpoint that proxies to a Claude Code OAuth upstream.
+  const [forceOauth, setForceOauth] = useState(() => initialLocalEndpoint?.forceOauth ?? false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<null | string>(null)
   // `options` can change at runtime when callers filter the catalog (e.g. the
@@ -686,6 +713,9 @@ export function ApiKeyForm({
       setOption(options[0])
       setValue('')
       setLocalKey('')
+      setTransport('auto')
+      setModelsText('')
+      setForceOauth(false)
       setError(null)
     }
   }, [option.envKey, options])
@@ -698,6 +728,10 @@ export function ApiKeyForm({
     setOption(o)
     setValue('')
     setLocalKey('')
+    setTransport('auto')
+    setModelsText('')
+    setEndpointName('')
+    setForceOauth(false)
     setError(null)
     requestAnimationFrame(() => {
       entryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -723,11 +757,28 @@ export function ApiKeyForm({
 
     setSaving(true)
     setError(null)
-    const result = await onSave(option.envKey, value, option.name, isLocal ? localKey : undefined)
+
+    const endpointOptions = isLocal
+      ? {
+          apiMode: transport,
+          name: endpointName.trim() || undefined,
+          originalName: originalEndpointName || undefined,
+          forceOauth,
+          models: modelsText
+            .split(/[\n,]/)
+            .map(m => m.trim())
+            .filter(Boolean)
+        }
+      : undefined
+
+    const result = await onSave(option.envKey, value, option.name, isLocal ? localKey : undefined, endpointOptions)
 
     if (result.ok) {
       setValue('')
       setLocalKey('')
+      setModelsText('')
+      setEndpointName('')
+      setForceOauth(false)
     } else {
       setError(result.message ?? t.onboarding.couldNotSave)
     }
@@ -793,6 +844,15 @@ export function ApiKeyForm({
         {isLocal ? (
           <Input
             autoComplete="off"
+            onChange={e => setEndpointName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && void submit()}
+            placeholder={t.onboarding.endpointNamePlaceholder}
+            value={endpointName}
+          />
+        ) : null}
+        {isLocal ? (
+          <Input
+            autoComplete="off"
             className="font-mono"
             onChange={e => setLocalKey(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && void submit()}
@@ -800,6 +860,51 @@ export function ApiKeyForm({
             type="password"
             value={localKey}
           />
+        ) : null}
+        {isLocal ? (
+          <div className="grid gap-1">
+            <label className="text-xs font-medium text-muted-foreground">{t.onboarding.transportLabel}</label>
+            <Select onValueChange={setTransport} value={transport}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              {/* Above the onboarding overlay (z-1300/1310); the default
+                  Select content z-[140] would open behind it. */}
+              <SelectContent className="z-[1320]">
+                <SelectItem value="auto">{t.onboarding.transportAuto}</SelectItem>
+                <SelectItem value="chat_completions">{t.onboarding.transportChat}</SelectItem>
+                <SelectItem value="anthropic_messages">{t.onboarding.transportAnthropic}</SelectItem>
+                <SelectItem value="codex_responses">{t.onboarding.transportResponses}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
+        {isLocal ? (
+          <div className="grid gap-1">
+            <label className="text-xs font-medium text-muted-foreground">{t.onboarding.modelsLabel}</label>
+            <textarea
+              className="min-h-16 rounded-md border border-(--ui-stroke-secondary) bg-(--ui-control-background) px-2.5 py-1.5 font-mono text-xs text-foreground outline-none placeholder:text-(--ui-text-tertiary)/70 focus:border-(--theme-primary)"
+              onChange={e => setModelsText(e.target.value)}
+              placeholder={t.onboarding.modelsPlaceholder}
+              spellCheck={false}
+              value={modelsText}
+            />
+            <p className="text-[0.68rem] text-muted-foreground/70">{t.onboarding.modelsHint}</p>
+          </div>
+        ) : null}
+        {isLocal && (transport === 'anthropic_messages' || transport === 'auto') ? (
+          <label className="flex cursor-pointer items-start gap-2">
+            <input
+              checked={forceOauth}
+              className="mt-0.5 size-3.5 shrink-0 accent-(--theme-primary)"
+              onChange={e => setForceOauth(e.target.checked)}
+              type="checkbox"
+            />
+            <span className="grid gap-0.5">
+              <span className="text-xs font-medium text-foreground">{t.onboarding.forceOauthLabel}</span>
+              <span className="text-[0.68rem] text-muted-foreground/70">{t.onboarding.forceOauthHint}</span>
+            </span>
+          </label>
         ) : null}
         {error ? <p className="text-xs text-destructive">{error}</p> : null}
       </div>

@@ -1540,6 +1540,7 @@ def switch_model(agent, new_model, new_provider, api_key='', base_url='', api_mo
                 build_anthropic_client,
                 resolve_anthropic_token,
                 _is_oauth_token,
+                _model_force_oauth,
             )
             # Only fall back to ANTHROPIC_TOKEN when the provider is actually Anthropic.
             # Other anthropic_messages providers (MiniMax, Alibaba, etc.) must use their own
@@ -1569,7 +1570,9 @@ def switch_model(agent, new_model, new_provider, api_key='', base_url='', api_mo
                 effective_key, agent._anthropic_base_url,
                 timeout=get_provider_request_timeout(agent.provider, agent.model),
             )
-            agent._is_anthropic_oauth = _is_oauth_token(effective_key) if (_is_native_anthropic and isinstance(effective_key, str)) else False
+            agent._is_anthropic_oauth = _model_force_oauth() or (
+                _is_oauth_token(effective_key) if (_is_native_anthropic and isinstance(effective_key, str)) else False
+            )
             agent.client = None
             agent._client_kwargs = {}
         else:

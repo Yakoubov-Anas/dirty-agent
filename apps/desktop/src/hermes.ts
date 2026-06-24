@@ -12,6 +12,7 @@ import type {
   CronJob,
   CronJobCreatePayload,
   CronJobUpdates,
+  CustomProvidersResponse,
   ElevenLabsVoicesResponse,
   EnvVarInfo,
   HermesConfig,
@@ -417,6 +418,25 @@ export function disconnectOAuthProvider(providerId: string): Promise<{ ok: boole
     ...profileScoped(),
     path: `/api/providers/oauth/${encodeURIComponent(providerId)}`,
     method: 'DELETE'
+  })
+}
+
+export function listCustomProviders(): Promise<CustomProvidersResponse> {
+  return window.hermesDesktop.api<CustomProvidersResponse>({
+    ...profileScoped(),
+    path: '/api/providers/custom'
+  })
+}
+
+export function removeCustomProvider(params: {
+  name?: string
+  provider_key?: string
+}): Promise<{ ok: boolean; removed: boolean }> {
+  return window.hermesDesktop.api<{ ok: boolean; removed: boolean }>({
+    ...profileScoped(),
+    path: '/api/providers/custom/remove',
+    method: 'POST',
+    body: params
   })
 }
 

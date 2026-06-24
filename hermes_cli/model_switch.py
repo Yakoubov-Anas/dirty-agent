@@ -1770,9 +1770,7 @@ def list_authenticated_providers(
             if isinstance(discover, str):
                 discover = discover.lower() not in {"false", "no", "0"}
             has_explicit_models = bool(models_list)
-            should_probe = bool(api_url) and discover and (
-                bool(api_key) or not has_explicit_models
-            )
+            should_probe = bool(api_url) and discover and not has_explicit_models
             if should_probe:
                 try:
                     from hermes_cli.models import fetch_api_models
@@ -2016,7 +2014,7 @@ def list_authenticated_providers(
             #   (parity with section 3's user ``providers:`` behaviour).
             should_probe = (
                 bool(api_url)
-                and (bool(api_key) or not grp["models"])
+                and not grp["models"]
                 and grp.get("discover_models", True)
             )
             if should_probe:

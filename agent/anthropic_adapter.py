@@ -411,6 +411,26 @@ def _is_oauth_token(key: str) -> bool:
     return False
 
 
+def _model_force_oauth() -> bool:
+    """Return True when the active ``model`` config opts into forced Claude Code
+    OAuth adaptation for a NON-native provider.
+
+    Custom providers (e.g. a proxy that forwards to a Claude Code OAuth upstream)
+    never set ``provider == "anthropic"``, so the normal token-shape OAuth
+    detection skips them and their requests go on the wire with single-underscore
+    ``mcp_`` tool names + no Claude Code identity — which Anthropic's billing
+    classifier rejects (HTTP 400).  Setting ``force_oauth: true`` on the custom
+    provider opts the session into the same Claude Code transforms (identity
+    system prefix + ``mcp__`` tool-name normalization) the native OAuth path uses.
+    """
+    try:
+        from hermes_cli.config import load_config
+        model_cfg = load_config().get("model")
+        return bool(isinstance(model_cfg, dict) and model_cfg.get("force_oauth"))
+    except Exception:
+        return False
+
+
 def _normalize_base_url_text(base_url) -> str:
     """Normalize SDK/base transport URL values to a plain string for inspection.
 

@@ -425,6 +425,39 @@ export function startManualLocalEndpoint(reason: null | string = null) {
   })
 }
 
+// One-shot prefill for the local/custom endpoint form, set when EDITING an
+// existing custom provider. Module-level (like pendingProviderOAuthId) since the
+// Picker consumes it on the next render. Cleared by the overlay after read.
+export interface LocalEndpointPrefill {
+  baseUrl: string
+  apiMode?: string
+  models?: string[]
+  name?: string
+  originalName?: string
+  forceOauth?: boolean
+}
+
+let pendingLocalEndpointPrefill: LocalEndpointPrefill | null = null
+let localEndpointEditSeq = 0
+
+// Open the local/custom endpoint form prefilled to edit an existing provider.
+export function startEditCustomProvider(prefill: LocalEndpointPrefill, reason: null | string = null) {
+  pendingLocalEndpointPrefill = prefill
+  localEndpointEditSeq += 1
+  startManualLocalEndpoint(reason)
+}
+
+export function takeLocalEndpointPrefill(): LocalEndpointPrefill | null {
+  const value = pendingLocalEndpointPrefill
+  pendingLocalEndpointPrefill = null
+
+  return value
+}
+
+export function getLocalEndpointEditSeq(): number {
+  return localEndpointEditSeq
+}
+
 // One-shot hand-off used when the dedicated Providers settings page launches a
 // specific provider's sign-in: we open the manual onboarding overlay AND
 // remember which provider to start, so the overlay drives that exact OAuth
@@ -735,7 +768,10 @@ export async function saveOnboardingApiKey(
   // Optional endpoint key — only meaningful for the "Local / custom endpoint"
   // option, whose primary `value` is the base URL. Ignored for plain API-key
   // providers (their key IS `value`).
-  endpointApiKey?: string
+  endpointApiKey?: string,
+  // Local-endpoint extras: transport (api_mode) + an explicit model list. Only
+  // used for the OPENAI_BASE_URL option.
+  endpointOptions?: { apiMode?: string; models?: string[]; name?: string; originalName?: string; forceOauth?: boolean }
 ) {
   const trimmed = value.trim()
 
@@ -748,7 +784,7 @@ export async function saveOnboardingApiKey(
   // base_url + model + api_key), not dropped into .env — runtime resolution
   // ignores OPENAI_BASE_URL.
   if (envKey === 'OPENAI_BASE_URL') {
-    return saveOnboardingLocalEndpoint(trimmed, endpointApiKey?.trim() ?? '', ctx)
+    return saveOnboardingLocalEndpoint(trimmed, endpointApiKey?.trim() ?? '', ctx, endpointOptions)
   }
 
   // No key validation here on purpose: we previously live-probed the key and
@@ -792,9 +828,19 @@ export async function saveOnboardingApiKey(
 // re-assigns the model from /api/model/options WITHOUT a base_url, which would
 // wipe the base_url we just wrote. We have a concrete model already, so we
 // verify the runtime directly and finish.
-export async function saveOnboardingLocalEndpoint(baseUrl: string, apiKey: string, ctx: OnboardingContext) {
+export async function saveOnboardingLocalEndpoint(
+  baseUrl: string,
+  apiKey: string,
+  ctx: OnboardingContext,
+  options?: { apiMode?: string; models?: string[]; name?: string; originalName?: string; forceOauth?: boolean }
+) {
   const url = baseUrl.trim()
   const key = apiKey.trim()
+  const apiMode = (options?.apiMode ?? '').trim()
+  const name = (options?.name ?? '').trim()
+  const originalName = (options?.originalName ?? '').trim()
+  const forceOauth = options?.forceOauth ?? false
+  const explicitModels = (options?.models ?? []).map(m => m.trim()).filter(Boolean)
 
   if (!url) {
     return { ok: false, message: 'Enter the endpoint URL first.' }
@@ -802,34 +848,61 @@ export async function saveOnboardingLocalEndpoint(baseUrl: string, apiKey: strin
 
   // Probe connectivity + discover the served models. Any HTTP response proves
   // the endpoint is up; an unreachable probe hard-blocks because we can't
-  // resolve a model to route to.
-  let model = ''
+  // resolve a model to route to. When the user supplied an explicit model list
+  // (edit mode) skip the probe entirely — the endpoint is already known to work
+  // and the api key is not re-entered in the form (never prefilled for security).
+  let model = explicitModels[0] ?? ''
+  let discoveredModels = explicitModels
 
-  try {
-    const probe = await validateProviderCredential('OPENAI_BASE_URL', url, key)
+  if (!explicitModels.length) {
+    try {
+      const probe = await validateProviderCredential('OPENAI_BASE_URL', url, key)
 
-    if (!probe.ok && probe.reachable) {
-      return { ok: false, message: probe.message || 'Could not reach that endpoint.' }
+      if (!probe.ok && probe.reachable) {
+        return { ok: false, message: probe.message || 'Could not reach that endpoint.' }
+      }
+
+      if (!probe.reachable) {
+        return { ok: false, message: probe.message || `Could not reach ${url}.` }
+      }
+
+      model = (probe.models?.[0] ?? '').trim()
+      discoveredModels = (probe.models ?? []).map(m => m.trim()).filter(Boolean)
+    } catch {
+      return { ok: false, message: `Could not reach ${url}.` }
     }
 
-    if (!probe.reachable) {
-      return { ok: false, message: probe.message || `Could not reach ${url}.` }
+    if (!model) {
+      return {
+        ok: false,
+        message: `Connected to ${url}, but it advertised no models at /v1/models. Start a model on that endpoint and try again.`
+      }
     }
-
-    model = (probe.models?.[0] ?? '').trim()
-  } catch {
-    return { ok: false, message: `Could not reach ${url}.` }
   }
 
-  if (!model) {
-    return {
-      ok: false,
-      message: `Connected to ${url}, but it advertised no models at /v1/models. Start a model on that endpoint and try again.`
-    }
-  }
-
   try {
-    await setModelAssignment({ scope: 'main', provider: 'custom', model, base_url: url, api_key: key })
+    await setModelAssignment({
+      scope: 'main',
+      provider: 'custom',
+      model,
+      base_url: url,
+      api_key: key,
+      ...(apiMode ? { api_mode: apiMode } : {}),
+      ...(name ? { name } : {}),
+      ...(originalName ? { original_name: originalName } : {}),
+      force_oauth: forceOauth,
+      ...(discoveredModels.length > 0 ? { models: discoveredModels } : {})
+    })
+
+    // Edit mode (explicit models): settings saved — skip the reload/runtime
+    // gate since the api key is not re-entered and the endpoint is already
+    // known to work. Changes take effect on the next conversation.
+    if (explicitModels.length) {
+      completeDesktopOnboarding()
+      ctx.onCompleted?.()
+      return { ok: true }
+    }
+
     await ctx.requestGateway('reload.env').catch(() => undefined)
 
     const runtime = await checkRuntime(ctx)

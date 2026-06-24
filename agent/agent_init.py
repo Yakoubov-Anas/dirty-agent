@@ -680,8 +680,13 @@ def init_agent(
             # so injects Claude-Code identity headers and system prompts
             # that cause 401/403 on their endpoints.  Guards #1739 and
             # the third-party identity-injection bug.
-            from agent.anthropic_adapter import _is_oauth_token as _is_oat
-            agent._is_anthropic_oauth = _is_oat(effective_key) if (_is_native_anthropic and isinstance(effective_key, str)) else False
+            from agent.anthropic_adapter import _is_oauth_token as _is_oat, _model_force_oauth
+            # ``force_oauth`` lets a custom provider (e.g. a proxy forwarding to a
+            # Claude Code OAuth upstream) opt into the same Claude Code transforms
+            # the native OAuth path uses, even though provider != "anthropic".
+            agent._is_anthropic_oauth = _model_force_oauth() or (
+                _is_oat(effective_key) if (_is_native_anthropic and isinstance(effective_key, str)) else False
+            )
             agent._anthropic_client = build_anthropic_client(effective_key, base_url, timeout=_provider_timeout)
             # No OpenAI client needed for Anthropic mode
             agent.client = None

@@ -412,4 +412,42 @@ describe('saveOnboardingLocalEndpoint', () => {
     expect(result.message).toContain('No provider can serve the selected model.')
     expect($desktopOnboarding.get().configured).not.toBe(true)
   })
+
+  it('forwards an explicit transport + model list, using the first model as default', async () => {
+    const calls: { body?: unknown; path: string }[] = []
+
+    const api = vi.fn(async ({ body, path }: { body?: unknown; path: string }) => {
+      calls.push({ body, path })
+
+      if (path === '/api/providers/validate') {
+        // Endpoint advertises something else; explicit models must win.
+        return { ok: true, reachable: true, message: '', models: ['ignored-model'] }
+      }
+
+      if (path === '/api/model/set') {
+        return { ok: true, provider: 'custom', model: 'gpt-4o', base_url: 'http://localhost:8317/v1' }
+      }
+
+      throw new Error(`unexpected api path: ${path}`)
+    })
+
+    installApiMock(api)
+
+    const result = await saveOnboardingLocalEndpoint('http://localhost:8317/v1', '', { requestGateway: readyGateway() }, {
+      apiMode: 'chat_completions',
+      models: ['gpt-4o', 'claude-sonnet-4', 'gemini-2.5-pro']
+    })
+
+    expect(result.ok).toBe(true)
+
+    const assign = calls.find(c => c.path === '/api/model/set')
+    expect(assign?.body).toMatchObject({
+      scope: 'main',
+      provider: 'custom',
+      model: 'gpt-4o',
+      base_url: 'http://localhost:8317/v1',
+      api_mode: 'chat_completions',
+      models: ['gpt-4o', 'claude-sonnet-4', 'gemini-2.5-pro']
+    })
+  })
 })

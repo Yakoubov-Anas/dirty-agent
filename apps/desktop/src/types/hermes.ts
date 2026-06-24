@@ -63,6 +63,26 @@ export interface OAuthProvidersResponse {
   providers: OAuthProvider[]
 }
 
+/** A saved custom/local endpoint (config.yaml custom_providers/providers).
+ *  Never carries the api_key — only `has_key`. */
+export interface CustomProvider {
+  name: string
+  provider_key: string
+  base_url: string
+  api_mode: string
+  model: string
+  models: string[]
+  has_key: boolean
+  key_env: string
+  /** When true, this custom endpoint forces Claude Code OAuth adaptation
+   *  (identity prefix + mcp__ tool-name normalization) on anthropic_messages. */
+  force_oauth: boolean
+}
+
+export interface CustomProvidersResponse {
+  providers: CustomProvider[]
+}
+
 export type OAuthStartResponse =
   | {
       auth_url: string
@@ -675,7 +695,24 @@ export interface ModelAssignmentRequest {
   /** OpenAI-compatible endpoint URL. Only honored for custom/local providers
    *  on the main slot — wires a self-hosted endpoint into runtime resolution. */
   base_url?: string
+  /** Transport / wire format for a custom/local provider:
+   *  'chat_completions' | 'anthropic_messages' | 'codex_responses' | 'auto'.
+   *  'auto' (or omitted) lets the backend detect from the URL. */
+  api_mode?: string
+  /** Explicit list of models the custom/local endpoint serves. When provided,
+   *  all are registered under the provider (first = default). */
+  models?: string[]
+  /** Force Claude Code OAuth adaptation for an anthropic_messages custom
+   *  endpoint (identity prefix + mcp__ tool-name normalization). Use for a
+   *  proxy that forwards to a Claude Code OAuth upstream. */
+  force_oauth?: boolean
   model: string
+  /** Display name for a custom/local provider. Allows multiple entries at the
+   *  same base_url; the provider is pinned to custom:<name>. */
+  name?: string
+  /** Original name of the provider before an edit/rename. Used by the backend
+   *  to locate the existing entry instead of creating a duplicate. */
+  original_name?: string
   provider: string
   scope: 'main' | 'auxiliary'
   task?: string

@@ -12,18 +12,19 @@ import {
   sortProviders
 } from '@/components/desktop-onboarding-overlay'
 import { Button } from '@/components/ui/button'
-import { disconnectOAuthProvider, listOAuthProviders } from '@/hermes'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { disconnectOAuthProvider, listCustomProviders, listOAuthProviders, removeCustomProvider } from '@/hermes'
 import { useI18n } from '@/i18n'
-import { Check, ChevronDown, ChevronRight, KeyRound, Loader2, Terminal, Trash2 } from '@/lib/icons'
+import { Check, ChevronDown, ChevronRight, Globe, KeyRound, Loader2, Pencil, Terminal, Trash2 } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { notify, notifyError } from '@/store/notifications'
-import { $desktopOnboarding, startManualProviderOAuth } from '@/store/onboarding'
-import type { EnvVarInfo, OAuthProvider } from '@/types/hermes'
+import { $desktopOnboarding, startEditCustomProvider, startManualProviderOAuth } from '@/store/onboarding'
+import type { CustomProvider, EnvVarInfo, OAuthProvider } from '@/types/hermes'
 
 import { isKeyVar, ProviderKeyRows } from './credential-key-ui'
 import { SettingsCategoryHeading, useEnvCredentials } from './env-credentials'
 import { providerGroup, providerMeta, providerPriority } from './helpers'
-import { LoadingState, SettingsContent } from './primitives'
+import { ListRow, LoadingState, SettingsContent } from './primitives'
 
 // The embedded terminal (and thus the "run disconnect command" path) only
 // exists in the Electron desktop shell, not the web dashboard.
@@ -278,6 +279,134 @@ function NoProviderKeys() {
   )
 }
 
+const TRANSPORT_LABELS: Record<string, string> = {
+  chat_completions: 'Chat Completions',
+  anthropic_messages: 'Anthropic Messages',
+  codex_responses: 'Responses / Codex',
+  bedrock_converse: 'Bedrock',
+  codex_app_server: 'Codex App Server'
+}
+
+function shortUrl(url: string): string {
+  return url.replace(/^https?:\/\//, '').replace(/\/$/, '')
+}
+
+// Lists saved custom/local endpoints with Edit (reopens the prefilled local
+// endpoint form) and Delete. Reads the live onboarding `manual` flag so the list
+// refreshes after the user finishes editing in the overlay.
+function CustomEndpointsSection() {
+  const { t } = useI18n()
+  const p = t.settings.providers
+  const [providers, setProviders] = useState<CustomProvider[]>([])
+  const [pendingDelete, setPendingDelete] = useState<CustomProvider | null>(null)
+  const onboardingActive = useStore($desktopOnboarding).manual
+
+  const refresh = useCallback(async () => {
+    try {
+      const res = await listCustomProviders()
+      setProviders(res.providers)
+    } catch {
+      // Best-effort — just hide the section on failure.
+      setProviders([])
+    }
+  }, [])
+
+  // Reload when the edit overlay closes (manual flips false) and on mount.
+  useEffect(() => {
+    if (!onboardingActive) {
+      void refresh()
+    }
+  }, [onboardingActive, refresh])
+
+  const edit = (cp: CustomProvider) => {
+    startEditCustomProvider({
+      baseUrl: cp.base_url,
+      apiMode: cp.api_mode || 'auto',
+      models: cp.models,
+      name: cp.name,
+      originalName: cp.name,
+      forceOauth: cp.force_oauth
+    })
+  }
+
+  if (providers.length === 0) {
+    return null
+  }
+
+  return (
+    <section className="mb-5 grid gap-1">
+      <SettingsCategoryHeading icon={Globe} title={p.customEndpoints} />
+      <p className="-mt-1 mb-1 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
+        {p.customEndpointsIntro}
+      </p>
+      <div className="divide-y divide-(--ui-stroke-tertiary)">
+        {providers.map(cp => (
+          <ListRow
+            action={
+              <div className="flex items-center justify-end gap-1">
+                <Button
+                  aria-label={p.editEndpoint}
+                  onClick={() => edit(cp)}
+                  size="icon-xs"
+                  title={p.editEndpoint}
+                  type="button"
+                  variant="ghost"
+                >
+                  <Pencil className="size-3" />
+                </Button>
+                <Button
+                  aria-label={`${t.common.remove} ${cp.name}`}
+                  onClick={() => setPendingDelete(cp)}
+                  size="icon-xs"
+                  title={t.common.remove}
+                  type="button"
+                  variant="ghost"
+                >
+                  <Trash2 className="size-3" />
+                </Button>
+              </div>
+            }
+            description={shortUrl(cp.base_url)}
+            hint={
+              [
+                TRANSPORT_LABELS[cp.api_mode] ?? (cp.api_mode || p.transportAuto),
+                cp.models.length > 0 ? p.modelCount(String(cp.models.length)) : null
+              ]
+                .filter(Boolean)
+                .join(' · ') || undefined
+            }
+            key={cp.provider_key || cp.base_url}
+            title={cp.name}
+          />
+        ))}
+      </div>
+
+      <ConfirmDialog
+        confirmLabel={t.common.remove}
+        description={p.removeEndpointConfirm(pendingDelete?.name ?? '')}
+        destructive
+        onClose={() => setPendingDelete(null)}
+        onConfirm={async () => {
+          const target = pendingDelete
+
+          if (!target) {
+            return
+          }
+
+          await removeCustomProvider({
+            name: target.name || undefined,
+            provider_key: target.provider_key || undefined
+          })
+          notify({ kind: 'success', title: p.removedTitle, message: p.endpointRemoved(target.name), durationMs: 3000 })
+          await refresh()
+        }}
+        open={Boolean(pendingDelete)}
+        title={p.removeEndpointTitle}
+      />
+    </section>
+  )
+}
+
 export function ProvidersSettings({ onClose, onViewChange, view }: ProvidersSettingsProps) {
   const { t } = useI18n()
   const { rowProps, vars } = useEnvCredentials()
@@ -374,6 +503,7 @@ export function ProvidersSettings({ onClose, onViewChange, view }: ProvidersSett
   if (showApiKeys) {
     return (
       <SettingsContent>
+        <CustomEndpointsSection />
         {keyGroups.length > 0 ? (
           <div className="grid gap-2">
             {keyGroups.map(group => (

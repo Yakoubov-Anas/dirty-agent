@@ -786,6 +786,31 @@ class ModelAssignment(BaseModel):
     # ``hermes model`` custom flow collects. Honored only on the main slot for
     # custom/local providers.
     api_key: str = ""
+    # Optional transport / wire format for a custom/local provider:
+    # "chat_completions" | "anthropic_messages" | "codex_responses" |
+    # "bedrock_converse" | "codex_app_server". "auto" or "" lets the runtime
+    # auto-detect from the URL. Honored only for custom/local main-slot saves;
+    # lets the GUI pin the endpoint format (e.g. force OpenAI chat-completions
+    # for a proxy that translates Claude internally).
+    api_mode: str = ""
+    # Optional explicit list of models the custom/local endpoint serves. When
+    # provided, all are registered under the custom provider (the first is the
+    # default); otherwise the endpoint's /v1/models is auto-discovered.
+    models: list[str] = []
+    # Optional display name for a custom/local provider. Lets multiple entries
+    # share one base_url (e.g. different transports/model sets) — each is keyed
+    # by name and selected via provider="custom:<name>".
+    name: str = ""
+    # When True, a custom/local provider on the anthropic_messages transport
+    # opts into Claude Code OAuth adaptation (identity system prefix + mcp__
+    # tool-name normalization). Use for proxies that forward to a Claude Code
+    # OAuth upstream, which rejects single-underscore mcp_ tool names (HTTP 400).
+    # None (omitted) = don't touch the existing flag; False = explicitly clear it.
+    force_oauth: Optional[bool] = None
+    # Original name of the custom provider before an edit/rename. When provided,
+    # _save_custom_provider uses it as the lookup key so the existing entry is
+    # updated in place rather than a duplicate being created.
+    original_name: Optional[str] = None
     confirm_expensive_model: bool = False
     profile: Optional[str] = None
 
@@ -858,7 +883,7 @@ def _normalize_main_model_assignment(provider: str, model: str) -> tuple[str, st
 
 
 def _apply_main_model_assignment(
-    model_cfg: "Any", provider: str, model: str, base_url: str = "", api_key: str = ""
+    model_cfg: "Any", provider: str, model: str, base_url: str = "", api_key: str = "", api_mode: str = "", force_oauth: Optional[bool] = None
 ) -> dict:
     """Apply a main-slot model assignment to a ``model`` config dict in place.
 
@@ -889,23 +914,33 @@ def _apply_main_model_assignment(
         model_cfg = {}
     prev_provider = str(model_cfg.get("provider") or "").strip().lower()
     new_provider = provider.strip().lower()
+    # A rename within the custom provider family (custom:old-name → custom:new-name)
+    # is NOT a true provider switch — don't clear base_url/api_key/api_mode/force_oauth.
+    _both_custom = new_provider.startswith("custom:") and prev_provider.startswith("custom:")
+    _is_provider_switch = new_provider != prev_provider and not _both_custom
     model_cfg["provider"] = provider
     model_cfg["default"] = model
     if base_url.strip():
         model_cfg["base_url"] = base_url.strip()
-    elif model_cfg.get("base_url") and new_provider != prev_provider:
-        # Switching providers: the old URL belonged to the old provider, drop
-        # it so the new provider's default endpoint is used. Same-provider
-        # re-assignment keeps the user's configured base_url intact.
+    elif model_cfg.get("base_url") and _is_provider_switch:
         model_cfg["base_url"] = ""
-    # The endpoint key follows the same lifecycle as base_url: an explicit key
-    # is always persisted; an existing key is dropped only when switching to a
-    # different provider (it belonged to the old endpoint), and preserved on a
-    # same-provider re-pick so re-selecting a model doesn't wipe the key.
     if api_key.strip():
         model_cfg["api_key"] = api_key.strip()
-    elif model_cfg.get("api_key") and new_provider != prev_provider:
+    elif model_cfg.get("api_key") and _is_provider_switch:
         model_cfg["api_key"] = ""
+    mode = (api_mode or "").strip().lower()
+    if mode and mode != "auto":
+        model_cfg["api_mode"] = mode
+    elif mode == "auto":
+        model_cfg.pop("api_mode", None)
+    elif model_cfg.get("api_mode") and _is_provider_switch:
+        model_cfg.pop("api_mode", None)
+    if force_oauth is True:
+        model_cfg["force_oauth"] = True
+    elif force_oauth is False:
+        model_cfg.pop("force_oauth", None)
+    elif model_cfg.get("force_oauth") and _is_provider_switch:
+        model_cfg.pop("force_oauth", None)
     model_cfg.pop("context_length", None)
     return model_cfg
 
@@ -4376,6 +4411,11 @@ async def set_model_assignment(body: ModelAssignment, profile: Optional[str] = N
     task = (body.task or "").strip().lower()
     base_url = (body.base_url or "").strip()
     api_key = (body.api_key or "").strip()
+    api_mode = (body.api_mode or "").strip().lower()
+    models = [m.strip() for m in (body.models or []) if isinstance(m, str) and m.strip()]
+    custom_name = (body.name or "").strip()
+    force_oauth = body.force_oauth  # Optional[bool]: None=no-op, True=set, False=clear
+    original_name = (body.original_name or "").strip()
 
     if scope not in {"main", "auxiliary"}:
         raise HTTPException(status_code=400, detail="scope must be 'main' or 'auxiliary'")
@@ -4412,7 +4452,7 @@ async def set_model_assignment(body: ModelAssignment, profile: Optional[str] = N
         def _apply_assignment():
             with _profile_scope(body.profile or profile):
                 return _apply_model_assignment_sync(
-                    scope, provider, model, task, base_url, api_key
+                    scope, provider, model, task, base_url, api_key, api_mode, models, custom_name, force_oauth, original_name
                 )
 
         return await asyncio.to_thread(_apply_assignment)
@@ -4424,7 +4464,17 @@ async def set_model_assignment(body: ModelAssignment, profile: Optional[str] = N
 
 
 def _apply_model_assignment_sync(
-    scope: str, provider: str, model: str, task: str, base_url: str, api_key: str = ""
+    scope: str,
+    provider: str,
+    model: str,
+    task: str,
+    base_url: str,
+    api_key: str = "",
+    api_mode: str = "",
+    models: Optional[list] = None,
+    custom_name: str = "",
+    force_oauth: Optional[bool] = None,
+    original_name: str = "",
 ):
     """Synchronous body of POST /api/model/set.
 
@@ -4438,8 +4488,15 @@ def _apply_model_assignment_sync(
         if not provider or not model:
             raise HTTPException(status_code=400, detail="provider and model required for main")
         provider, model = _normalize_main_model_assignment(provider, model)
+        # For a named custom endpoint, pin the provider to ``custom:<name>`` so
+        # multiple entries at the same base_url stay independently selectable
+        # (bare ``custom`` resolves by base_url and can't disambiguate them).
+        if custom_name and provider.strip().lower() in {"custom", "local"}:
+            name_norm = custom_name.strip().lower().replace(" ", "-")
+            if name_norm:
+                provider = f"custom:{name_norm}"
         model_cfg = _apply_main_model_assignment(
-            cfg.get("model", {}), provider, model, base_url, api_key
+            cfg.get("model", {}), provider, model, base_url, api_key, api_mode, force_oauth
         )
         cfg["model"] = model_cfg
 
@@ -4479,16 +4536,24 @@ def _apply_model_assignment_sync(
         # (_save_custom_provider). Without this the endpoint only lives in
         # ``model.*`` and the picker has no proper ready row for it — the
         # GUI then surfaces a "needs setup" dead-end on the bare ``custom``
-        # provider. Dedups by base_url, so re-saving is idempotent.
-        if provider.strip().lower() in {"custom", "local"} and base_url:
+        # provider. A user-supplied name dedups by NAME (so multiple entries
+        # can share a base_url); otherwise dedups by base_url.
+        provider_lc = provider.strip().lower()
+        if (provider_lc in {"custom", "local"} or provider_lc.startswith("custom:")) and base_url:
             try:
                 from hermes_cli.main import _auto_provider_name, _save_custom_provider
+
+                entry_name = custom_name.strip() or _auto_provider_name(base_url)
 
                 _save_custom_provider(
                     base_url,
                     api_key,
                     model,
-                    name=_auto_provider_name(base_url),
+                    name=entry_name,
+                    api_mode=(api_mode if api_mode and api_mode != "auto" else None),
+                    models=models or None,
+                    force_oauth=force_oauth,
+                    original_name=original_name or None,
                 )
             except Exception:
                 # Never block the assignment on the bookkeeping write —
@@ -6358,7 +6423,98 @@ async def list_oauth_providers(profile: Optional[str] = None):
         return {"providers": providers}
 
 
-@app.delete("/api/providers/oauth/{provider_id}")
+@app.get("/api/providers/custom")
+async def list_custom_providers(profile: Optional[str] = None):
+    """List saved custom/local endpoints (config.yaml custom_providers/providers).
+
+    Returns non-secret fields the GUI needs to display + edit each entry. The
+    api_key is NEVER returned — only a boolean ``has_key`` flag (mirrors the
+    env/secret rule). Per-provider:
+        name, provider_key, base_url, api_mode, model (default), models (list),
+        has_key, key_env
+    """
+    with _profile_scope(profile):
+        from hermes_cli.config import get_compatible_custom_providers
+
+        cfg = load_config()
+        # force_oauth is stored on model.force_oauth (set by _apply_main_model_assignment)
+        # rather than on the providers map entry itself. Cross-reference so the
+        # edit form can pre-check the checkbox for the active provider.
+        model_cfg = cfg.get("model") or {}
+        model_provider_lc = str(model_cfg.get("provider") or "").strip().lower()
+        model_force_oauth = bool(model_cfg.get("force_oauth"))
+
+        out = []
+        for entry in get_compatible_custom_providers(cfg):
+            models_cfg = entry.get("models")
+            if isinstance(models_cfg, dict):
+                models = list(models_cfg.keys())
+            elif isinstance(models_cfg, list):
+                models = [str(m) for m in models_cfg]
+            else:
+                models = []
+
+            # Match this entry against the active model provider by name slug or
+            # provider_key so we can surface the model-level force_oauth flag.
+            entry_name_slug = str(entry.get("name") or "").strip().lower().replace(" ", "-")
+            entry_pkey = str(entry.get("provider_key") or "").strip().lower()
+            is_active = bool(
+                (entry_name_slug and model_provider_lc == f"custom:{entry_name_slug}")
+                or (entry_pkey and model_provider_lc == f"custom:{entry_pkey}")
+                or (entry_pkey and model_provider_lc == entry_pkey)
+            )
+            force_oauth = bool(entry.get("force_oauth")) or (is_active and model_force_oauth)
+
+            out.append({
+                "name": entry.get("name", ""),
+                "provider_key": entry.get("provider_key", ""),
+                "base_url": entry.get("base_url", ""),
+                "api_mode": entry.get("api_mode", ""),
+                "model": entry.get("model", ""),
+                "models": models,
+                "has_key": bool(str(entry.get("api_key", "") or "").strip()),
+                "key_env": entry.get("key_env", ""),
+                "force_oauth": force_oauth,
+            })
+
+        return {"providers": out}
+
+
+class CustomProviderRemoval(BaseModel):
+    name: str = ""
+    provider_key: str = ""
+
+
+@app.post("/api/providers/custom/remove")
+async def remove_custom_provider_endpoint(
+    body: CustomProviderRemoval,
+    request: Request,
+    profile: Optional[str] = None,
+):
+    """Remove a saved custom provider by name or provider_key. Token-gated."""
+    _require_token(request)
+
+    name = (body.name or "").strip()
+    provider_key = (body.provider_key or "").strip()
+
+    if not name and not provider_key:
+        raise HTTPException(status_code=400, detail="name or provider_key required")
+
+    def _remove():
+        from hermes_cli.config import remove_custom_provider
+
+        with _profile_scope(profile):
+            return remove_custom_provider(name=name, provider_key=provider_key)
+
+    removed = await asyncio.to_thread(_remove)
+
+    if not removed:
+        raise HTTPException(status_code=404, detail="No matching custom provider found")
+
+    return {"ok": True, "removed": True}
+
+
+
 async def disconnect_oauth_provider(
     provider_id: str,
     request: Request,
